@@ -1,0 +1,20 @@
+# 运行产物：kernel 数据、日志、临时 payload
+runtime/
+runtime-probe/
+*.log
+
+# 本机密钥（网关 key）
+local.secrets.json
+
+# 逆向抓下来的客户端片段（不随仓库分发）
+notes/
+
+# 各类临时目录
+.temp/
+.debug/
+.codex-test/
+.codex-probe/
+.probe-run/
+__pycache__/
+.pytest_cache/
+node_modules/

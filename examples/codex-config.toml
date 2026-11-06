@@ -1,0 +1,22 @@
+﻿# Codex CLI 指向本地 TeleAgent 反代的示例配置
+#
+# 用法：
+#   1) 先启动网关：teleagent-proxy\start.cmd
+#   2) 把本文件复制到 %CODEX_HOME%\config.toml（默认 ~/.codex/config.toml），
+#      或把下面 [model_providers.custom] 段落合并进现有配置
+#   3) 设置环境变量 TA_KEY=dummy（网关没开 TA_API_KEY 时值随意）
+#   4) codex exec "你好"
+
+model = "chat-flash"          # chat-flash x0.2 / chat-pro x0.6 / chat-flagship x1.0
+model_provider = "custom"
+model_reasoning_effort = "low"
+experimental_use_freeform_apply_patch = true
+disable_response_storage = true
+
+[model_providers.custom]
+name = "TeleAgent"
+base_url = "http://127.0.0.1:8787/v1"
+wire_api = "responses"        # Codex 0.12x 起只支持 responses，chat 会在启动时报错
+requires_openai_auth = false
+env_key = "TA_KEY"
+
