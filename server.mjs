@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // TeleAgent → 本地 OpenAI 兼容反代（kernel 模式）
 //
 // 用法：
@@ -11,6 +11,7 @@ import { resolveOwner, accountDir, tokenFile, readJson, kernelVersion, ensureTel
 import { loadAuthState, deviceMeta } from './lib/auth.mjs';
 import { startKernel } from './lib/kernel.mjs';
 import { createToolBridge } from './lib/toolbridge.mjs';
+import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,28 +41,50 @@ if (models.length === 0) {
 }
 
 console.log(`[teleagent] 账号 ${auth.claims?.accountName ?? '?'} · kernel ${kernelVersion()}`);
-const kernel = await startKernel({
-  runtimeRoot: path.join(here, 'runtime'),
-  auth: { token: auth.token, deviceId: meta.deviceId, installId: meta.installId },
-  catalog,
-});
-try {
-  await kernel.waitReady({ timeoutMs: 90000 });
-} catch (err) {
-  console.error('[teleagent] kernel 未就绪：', err.message);
-  kernel.close();
-  process.exit(1);
-}
+
+const runtimeRoot = path.join(here, 'runtime');
+const authState = { token: auth.token, deviceId: meta.deviceId, installId: meta.installId };
+
+let kernel = await startKernel({ runtimeRoot, auth: authState, catalog });
+await kernel.waitReady({ timeoutMs: 90000 });
 
 const bridge = await createToolBridge({ kernel });
 
+/**
+ * 按客户端切换 kernel 的 agent prompt。
+ *
+ * kernel 内置的系统提示词把模型钉死成「星辰超级智能体」，对话里怎么声明自己是 Codex 都没用
+ * （实测会被拒绝）。唯一生效的办法是启动时用 `agent.build.prompt` 替换它，
+ * 所以这里按「客户端类型 + 提示词指纹」维护一个当前 kernel：变了就换内核。
+ */
+let kernelKey = 'default';
+let resetSessions = () => {};
+async function getKernel({ key, prompt }) {
+  if (key === kernelKey) return kernel;
+  if (bridge.hasCalls()) return kernel; // 工具循环进行中，先不换，避免打断挂起调用
+  console.log(`[teleagent] 切换 kernel 提示词：${kernelKey} → ${key}`);
+  try {
+    kernel.close();
+  } catch {}
+  kernel = await startKernel({ runtimeRoot, auth: authState, catalog, agentPrompt: prompt });
+  await kernel.waitReady({ timeoutMs: 90000 });
+  kernelKey = key;
+  bridge.attach(kernel);
+  resetSessions();
+  return kernel;
+}
+
 const shim = await createShim({
-  kernel,
+  getKernel,
   bridge,
   models,
   apiKey: process.env.TA_API_KEY || null,
   port: Number(process.env.TA_PORT || 8787),
 });
+resetSessions = () => {
+  shim.resetSessions();
+  resetResponsesSessions();
+};
 
 console.log(`[teleagent] OpenAI 兼容端点: ${shim.url}`);
 console.log(`[teleagent] 模型: ${models.map((m) => m.id).join(', ')}`);
@@ -80,3 +103,4 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('exit', () => kernel.close());
+

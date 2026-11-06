@@ -1,4 +1,4 @@
-# teleagent-proxy
+﻿# teleagent-proxy
 
 把本机已登录的 **TeleAgent（天翼 AI 星辰超级智能体桌面端，Windows 版）** 反代成一个
 **本地 OpenAI 兼容端点**：任何支持 `base_url` 的客户端（OpenAI SDK、Cherry Studio、
@@ -232,6 +232,35 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 - 错误：HTTP 4xx/5xx + `{error:{message,type,code}}`；额度不足统一成 `insufficient quota`
 - 会话：按 `user` 字段或「首条用户消息」指纹复用 kernel 会话，6 小时 TTL；kernel 侧保留历史
 
+## 身份与系统提示词（重要）
+
+kernel 内置的系统提示词把模型钉死成「星辰超级智能体（TeleAgent）」。实测：**在对话里声明
+“你是 Codex”没用**，模型会明确拒绝改身份（“这是无法通过对话指令更改的设定”）。
+
+唯一生效的办法是在**启动 kernel 时**用配置覆盖 agent 提示词：
+
+```jsonc
+{ "default_agent": "build", "agent": { "build": { "prompt": "…" } } }
+```
+
+所以网关按客户端自动选提示词：
+
+| 客户端 | 取哪段当系统提示词 |
+|---|---|
+| Codex（`/v1/responses`） | 请求里的 `instructions` |
+| Claude Code（`/v1/messages`） | 请求里的 `system` |
+| OpenAI 兼容（`/v1/chat/completions`） | 首条 `system` 消息 |
+
+提示词指纹变了会**换一个 kernel**（约 2 秒，会话映射同时清空；客户端本身每轮都会重放历史，
+Codex / Claude Code 不受影响）。工具调用挂起期间不会切换，避免打断工具循环。
+
+实测效果：
+
+```
+你 > 你是谁？
+Codex > 我是 Codex（运行在终端里的编程助手）……
+```
+
 ## 配置
 
 | 环境变量 | 默认 | 说明 |
@@ -240,6 +269,7 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 | `TA_API_KEY` | 空 | 设置后要求 `Authorization: Bearer` 或 `x-api-key` |
 | `TA_DEFAULT_MODEL` | 目录第一个 | 客户端模型名匹配不上时的兜底 |
 | `TA_ALLOW_KERNEL_TOOLS` | 关 | 设为 `1` 才放行 kernel 自带的 bash/read/write 等工具（默认全禁） |
+| `TA_GATEWAY_KEY` | — | 上游 gateway key（见「获取上游 gateway key」） |
 | `TA_MODEL` | `chat-flash` | 仅探针用 |
 
 ## 反向工程结论（维护用）
@@ -277,6 +307,7 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 - **工具中继只做了 Responses（Codex）这一路**：`/v1/chat/completions` 与 `/v1/messages` 仍然忽略 `tools`。
   Claude Code 要能改文件，需要把 Anthropic 的 `tool_use`/`tool_result` 接到同一套桥（工作量不大，但没做）。
 - **并行工具调用未验证**：一次返回多个 `function_call` 时按顺序下发，客户端会逐个执行。
+- **文件水印**：kernel 的 eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（默认不会出现）；如自行放行 kernel 工具需注意。
 - **每轮固定开销**：kernel 会带自己的系统提示词与工具 schema（实测单轮 ~1.0–1.2 万 input tokens），
   按 `chat-flash` x0.2 计也不便宜；工具多轮时每轮都要重发。
 - **依赖桌面端登录**：JWT 过期（约 30 天）后需在桌面端重新登录；换账号后重启代理即可。
@@ -311,3 +342,4 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 | `tools/probe-tools.mjs` | 工具注册表探针（验证 MCP 挂载与内置工具开关） |
 | `tools/asar.mjs` / `slice.mjs` | 读客户端 `app.asar`（逆向用） |
 | `notes/` | 逆向时截下来的客户端源码片段 |
+
