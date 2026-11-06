@@ -314,6 +314,10 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 - **依赖逆向**：桌面端升级可能改 kernel 协议，升级后先跑 `node tools/doctor.mjs`。
 - **仅 Windows 验证**：macOS 路径在 `lib/paths.mjs` 里预留了 `TeleAgent` 二进制名，但未实测。
 
+## 版本
+
+当前版本 **0.2.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 安全与合规
 
 - 只监听 `127.0.0.1`；建议设 `TA_API_KEY`，避免同机其他程序白嫖你的额度
@@ -342,4 +346,5 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 | `tools/probe-tools.mjs` | 工具注册表探针（验证 MCP 挂载与内置工具开关） |
 | `tools/asar.mjs` / `slice.mjs` | 读客户端 `app.asar`（逆向用） |
 | `notes/` | 逆向时截下来的客户端源码片段 |
+
 
