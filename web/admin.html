@@ -371,6 +371,7 @@
         <div class="fieldlist">
           <div class="field"><span class="k">Base URL</span><span class="v" id="i-base">—</span></div>
           <div class="field"><span class="k">模型</span><span class="v" id="i-models">—</span></div>
+          <div class="field"><span class="k">提示词</span><span class="v" id="i-agent">—</span></div>
           <div class="field"><span class="k">鉴权</span><span class="v" id="i-auth">—</span></div>
         </div>
         <pre class="code" id="snippet"><span class="c"># 任意 OpenAI 兼容客户端</span>
@@ -624,6 +625,15 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     renderAuthMode();
   }
 
+  function agentLabel(a) {
+    if (!a || !a.client) return '—';
+    var names = { codex: 'Codex 原生', claude: 'Claude Code 原生', chat: '客户端 system', neutral: '中性兜底' };
+    var text = (names[a.client] || a.client) + ' · ' + (a.promptChars || 0).toLocaleString() + ' 字符';
+    if (a.verified === true) text += ' · 已校验';
+    else if (a.verified === false) text += ' · 未生效';
+    return text;
+  }
+
   function renderGateway() {
     var g = state.gateway || {};
     $('uptime').textContent = fmtDuration(g.uptimeSec || 0);
@@ -639,6 +649,8 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     $('i-base').textContent = g.baseUrl || '—';
     $('i-base').title = g.baseUrl || '';
     $('i-models').textContent = (g.models || []).join(' · ') || '—';
+    $('i-agent').textContent = agentLabel(g.agent);
+    $('i-agent').title = g.agent && g.agent.promptSha ? 'sha1:' + g.agent.promptSha : '';
     $('i-auth').textContent = g.authRequired
       ? (g.hasEnvKey ? '环境变量 TA_API_KEY + 密钥表' : '密钥表校验（已开启）')
       : '未开启（本机任意程序可调用）';

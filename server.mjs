@@ -6,11 +6,12 @@
 //   TA_PORT=9000 node server.mjs       # 换端口
 //   TA_API_KEY=sk-local node server.mjs # 要求客户端带 Bearer
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveOwner, accountDir, tokenFile, readJson, kernelVersion, ensureTeleAgentLayout } from './lib/paths.mjs';
 import { loadAuthState, deviceMeta } from './lib/auth.mjs';
-import { startKernel } from './lib/kernel.mjs';
+import { startKernel, NEUTRAL_AGENT_PROMPT } from './lib/kernel.mjs';
 import { createToolBridge } from './lib/toolbridge.mjs';
 import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
@@ -47,6 +48,45 @@ console.log(`[teleagent] 账号 ${auth.claims?.accountName ?? '?'} · kernel ${k
 const runtimeRoot = path.join(here, 'runtime');
 const authState = { token: auth.token, deviceId: meta.deviceId, installId: meta.installId };
 
+/**
+ * 当前内核实际采用的提示词来源（`/healthz` 与日志都读它）。
+ *
+ * 「模型又自报星辰」几乎只有两种原因：内核根本没吃进客户端提示词，或者客户端
+ * 提示词压根没发过来。把「谁在生效」变成可读字段，就不用再靠猜。
+ */
+let kernelInfo = { client: 'default', promptChars: 0, promptSha: null, verified: null };
+
+/**
+ * 启动/切换内核后回读 `/config`，确认 `agent.build.prompt` 真的是我们下发的版本。
+ * 读不到（接口变动）只记 `verified: null`，不阻断请求。
+ */
+async function verifyKernelPrompt(target, expected) {
+  const want = (expected ?? '').trim();
+  let got = null;
+  try {
+    const res = await target.call('GET', '/config', null, { timeoutMs: 8000 });
+    got = res.json?.agent?.build?.prompt ?? null;
+  } catch {
+    // 读不到就保持未校验；不影响代理本身
+  }
+  const actual = (got ?? '').trim();
+  const verified = got === null ? null : want ? actual === want : true;
+  if (verified === false) {
+    console.warn(
+      `[teleagent] ⚠ 内核没有采用我们下发的 prompt：期望 ${want.length} 字符，实际 ${actual.length} 字符`,
+    );
+  }
+  if (actual.includes('星辰超级智能体')) {
+    console.warn('[teleagent] ⚠ 内核正在使用自带「星辰」人设：检查 TA_BUILTIN_PROMPT 是否被设成了 1');
+  }
+  return {
+    promptChars: actual.length,
+    promptSha: actual ? crypto.createHash('sha1').update(actual).digest('hex').slice(0, 12) : null,
+    verified,
+  };
+}
+
+
 // API Key 表：默认 runtime/config/api-keys.json（TA_KEYS_FILE 可改），管理台在这里增删
 const keystore = createKeyStore({ file: process.env.TA_KEYS_FILE || path.join(runtimeRoot, 'config', 'api-keys.json') });
 const adminToken = process.env.TA_ADMIN_TOKEN || null;
@@ -54,6 +94,8 @@ const adminToken = process.env.TA_ADMIN_TOKEN || null;
 console.log('[teleagent] 正在启动 kernel（首次约需 1–2 分钟）…');
 let kernel = await startKernel({ runtimeRoot, auth: authState, catalog });
 await kernel.waitReady({ timeoutMs: 90000 });
+kernelInfo = { client: 'neutral', ...(await verifyKernelPrompt(kernel, NEUTRAL_AGENT_PROMPT)) };
+console.log(`[teleagent] 内核提示词：中性兜底 · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`);
 
 const bridge = await createToolBridge({ kernel });
 
@@ -69,13 +111,19 @@ let resetSessions = () => {};
 async function getKernel({ key, prompt }) {
   if (key === kernelKey) return kernel;
   if (bridge.hasCalls()) return kernel; // 工具循环进行中，先不换，避免打断挂起调用
-  console.log(`[teleagent] 切换 kernel 提示词：${kernelKey} → ${key}`);
+  const client = key.split(':')[0];
+  const chars = (prompt ?? '').trim().length;
+  console.log(`[teleagent] 切换 kernel 提示词：${kernelKey} → ${key}（${client}，${chars} 字符）`);
   try {
     kernel.close();
   } catch {}
   kernel = await startKernel({ runtimeRoot, auth: authState, catalog, agentPrompt: prompt });
   await kernel.waitReady({ timeoutMs: 90000 });
   kernelKey = key;
+  kernelInfo = { client, ...(await verifyKernelPrompt(kernel, prompt)) };
+  console.log(
+    `[teleagent] 内核提示词：${client} · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`,
+  );
   bridge.attach(kernel);
   resetSessions();
   return kernel;
@@ -83,7 +131,7 @@ async function getKernel({ key, prompt }) {
 
 const shim = await createShim({
   getKernel,
-  kernelStatus: () => ({ origin: kernel.origin }),
+  kernelStatus: () => ({ origin: kernel.origin, ...kernelInfo }),
   bridge,
   models,
   apiKey: process.env.TA_API_KEY || null,

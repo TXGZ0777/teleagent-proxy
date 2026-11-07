@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.2] - 2026-11-07
+
+### Added
+
+- **提示词自检**：每次启动 / 切换内核后回读内核 `GET /config`，核对 `agent.build.prompt`
+  是否真的是下发的版本；结果暴露为 `/healthz` 的 `agent` 字段
+  （`client` / `promptChars` / `promptSha` / `verified`），并同步显示在管理台「接入信息 → 提示词」。
+  这样「模型又自称星辰」时，不必再靠猜是客户端没发提示词、还是内核没用上。
+- `tools/probe-prompt.mjs`（`npm run probe:prompt`）：离线起一个内核，下发带金丝雀的提示词再读回，
+  `--builtin` 可对照内核自带人设。
+- 启动日志会明确打印当前提示词来源与字符数；`verified` 为 `false` 或内核里出现「星辰超级智能体」时告警。
+
 ## [0.3.1] - 2026-11-07
 
 ### Fixed

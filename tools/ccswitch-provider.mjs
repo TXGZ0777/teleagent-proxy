@@ -1,4 +1,4 @@
-﻿// 把「TeleAgent 本地反代」注册成 CC Switch 供应商（claude 或 codex）
+// 把「TeleAgent 本地反代」注册成 CC Switch 供应商（claude 或 codex）
 //
 //   node tools/ccswitch-provider.mjs --app codex          # 只打印配置（dry-run）
 //   node tools/ccswitch-provider.mjs --app codex --apply  # 写入 cc-switch.db（先备份）
@@ -67,7 +67,12 @@ const settingsConfig = appType === 'codex'
     };
 
 console.log(`CC Switch 供应商配置（app_type = ${appType}）\n`);
-console.log(JSON.stringify({ id: PROVIDER_ID, name: NAME, app_type: appType, settings_config: settingsConfig }, null, 2));
+// 打印时把 token 打码：终端/日志里不该出现明文密钥（数据库里仍然写真实值）
+const masked = TOKEN.length > 12 ? `${TOKEN.slice(0, 6)}…${TOKEN.slice(-4)}` : '***';
+const display = JSON.parse(JSON.stringify(settingsConfig));
+if (display.auth?.OPENAI_API_KEY) display.auth.OPENAI_API_KEY = masked;
+if (display.env?.ANTHROPIC_AUTH_TOKEN) display.env.ANTHROPIC_AUTH_TOKEN = masked;
+console.log(JSON.stringify({ id: PROVIDER_ID, name: NAME, app_type: appType, settings_config: display }, null, 2));
 
 if (!fs.existsSync(DB)) {
   console.log('\n找不到 cc-switch.db（%USERPROFILE%\\.cc-switch\\cc-switch.db），请先启动一次 CC Switch。');

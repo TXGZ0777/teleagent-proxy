@@ -1,4 +1,4 @@
-﻿# teleagent-proxy
+# teleagent-proxy
 
 把本机已登录的 **TeleAgent（天翼 AI 星辰超级智能体桌面端，Windows 版）** 反代成一个
 **本地 OpenAI 兼容端点**：任何支持 `base_url` 的客户端（OpenAI SDK、Cherry Studio、
@@ -227,7 +227,7 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 | POST | `/v1/responses` | Responses 协议（Codex CLI），流式事件完整 |
 | POST | `/v1/messages` | Anthropic Messages 协议（Claude Code / CC Switch） |
 | POST | `/v1/messages/count_tokens` | 粗略 token 估算 |
-| GET | `/healthz` | 代理与 kernel 状态（含鉴权开关、启用密钥数） |
+| GET | `/healthz` | 代理与 kernel 状态（鉴权开关、启用密钥数、当前生效的提示词来源） |
 | GET | `/admin` | Web 管理台（仅回环地址，见下节） |
 | GET | `/admin/api/state` | 管理台数据快照：网关状态、密钥表、统计 |
 | POST | `/admin/api/keys` | 新建密钥（支持 `count` 批量） |
@@ -317,6 +317,29 @@ Codex / Claude Code 不受影响）。工具调用挂起期间不会切换，避
 `TA_UPSTREAM_BASE_URL=http://127.0.0.1:9909/superCowork/sapi/api/v1 node server.mjs` → 发一次请求 →
 看 `runtime/capture/req-*.json` 里的 `messages[0]`。
 
+### 自检：内核到底吃进了哪段提示词
+
+每次启动 / 切换内核后，网关会回读内核的 `GET /config`，确认 `agent.build.prompt` 确实是我们下发的版本，
+结果同时写进三处：
+
+| 位置 | 看什么 |
+|---|---|
+| `GET /healthz` | `agent: { client, promptChars, promptSha, verified }`，`verified: true` 表示已回读确认 |
+| 管理台「接入信息 → 提示词」 | 例如 `Codex 原生 · 26,043 字符 · 已校验` |
+| 启动日志 | `[teleagent] 内核提示词：codex · 26043 字符 · 校验 通过` |
+
+`client` 取值：`codex` / `claude` / `chat` / `neutral`（客户端没给提示词时的中性兜底）。
+
+如果 `verified` 为 `false`，或内核里出现「星辰超级智能体」，启动日志会直接告警 ——
+多半是 `TA_BUILTIN_PROMPT=1` 被设上了，或者内核版本升级后改了配置键。
+
+离线核对（不经过网关，直接起一个内核看它吃进什么）：
+
+```powershell
+node tools/probe-prompt.mjs            # 下发一段带金丝雀的 Codex 风格提示词，看能否原样读回
+node tools/probe-prompt.mjs --builtin  # 对照：内核自带人设长什么样
+```
+
 ## 配置
 
 | 环境变量 | 默认 | 说明 |
@@ -378,7 +401,7 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 
 ## 版本
 
-当前版本 **0.3.1**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.3.2**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 

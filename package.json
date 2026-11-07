@@ -1,6 +1,6 @@
 {
   "name": "teleagent-proxy",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "把本机已登录的 TeleAgent 桌面端反代成本地 OpenAI 兼容端点（OpenAI / Responses / Anthropic 三套协议），内置 Web 管理台与多 API Key",
@@ -12,6 +12,7 @@
     "start": "node server.mjs",
     "doctor": "node tools/doctor.mjs",
     "probe": "node tools/probe-kernel.mjs",
+    "probe:prompt": "node tools/probe-prompt.mjs",
     "probe:tools": "node tools/probe-tools.mjs",
     "capture": "node tools/capture-upstream.mjs"
   },
