@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // TeleAgent → 本地 OpenAI 兼容反代（kernel 模式）
 //
 // 用法：
@@ -76,6 +76,7 @@ async function getKernel({ key, prompt }) {
 
 const shim = await createShim({
   getKernel,
+  kernelStatus: () => ({ origin: kernel.origin }),
   bridge,
   models,
   apiKey: process.env.TA_API_KEY || null,
