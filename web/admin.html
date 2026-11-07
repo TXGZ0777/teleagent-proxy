@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TeleAgent 网关 · 管理台</title>
+<style>
+  :root {
+    --bg: #f2f4f7;
+    --panel: #ffffff;
+    --ink: #171a20;
+    --ink-2: #3d4450;
+    --muted: #71787f;
+    --line: #e3e7ec;
+    --line-strong: #d3d9e0;
+    --accent: #2f5bea;
+    --accent-soft: #eaefff;
+    --ok: #16794a;
+    --ok-soft: #e6f5ec;
+    --warn: #a9761a;
+    --warn-soft: #fdf3e2;
+    --danger: #c0342b;
+    --danger-soft: #fdeceb;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .05);
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px 56px; }
+
+  /* ---------- header ---------- */
+  header.top {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 18px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .mark {
+    width: 38px; height: 38px; border-radius: 11px; flex: none;
+    background: linear-gradient(145deg, #2f5bea, #5b8bff);
+    color: #fff; font-weight: 700; letter-spacing: .5px;
+    display: grid; place-items: center; font-size: 14px;
+  }
+  .brand h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .brand p { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
+  .spacer { flex: 1 1 auto; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 11px; border-radius: 999px; font-size: 12px;
+    background: var(--ok-soft); color: var(--ok); border: 1px solid #cfe9da;
+  }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); border-color: #f1e0c2; }
+  .pill.off { background: #f1f3f5; color: var(--muted); border-color: var(--line-strong); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .kv { font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--ink-2); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 34px; padding: 0 13px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--ink-2);
+    transition: background .15s, border-color .15s, transform .06s, box-shadow .15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #fafbfc; border-color: #c2cad4; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #2649c8; border-color: #2649c8; }
+  .btn.danger { color: var(--danger); border-color: #efc7c3; background: #fff; }
+  .btn.danger:hover { background: var(--danger-soft); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: #eef1f5; color: var(--ink-2); }
+  .btn.sm { height: 28px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .btn.icon { width: 30px; height: 28px; padding: 0; }
+
+  /* ---------- layout ---------- */
+  main { margin-top: 18px; display: grid; gap: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .stat { padding: 15px 16px; }
+  .stat .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .stat .value { font-size: 26px; font-weight: 660; letter-spacing: -.5px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .stat .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat .spark { margin-top: 8px; height: 26px; display: flex; align-items: flex-end; gap: 2px; }
+  .stat .spark i { flex: 1; background: #cfd9f9; border-radius: 2px 2px 0 0; min-height: 2px; }
+
+  .panel { padding: 16px; }
+  .panel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .panel-head h2 { font-size: 14px; margin: 0; font-weight: 650; }
+  .panel-head .hint { font-size: 12px; color: var(--muted); }
+
+  /* ---------- chart ---------- */
+  .chart { display: flex; align-items: flex-end; gap: 8px; height: 132px; padding-top: 6px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .bar-col .bar {
+    width: 100%; max-width: 42px; border-radius: 5px 5px 0 0;
+    background: linear-gradient(180deg, #7b9bff, #4b73f0); min-height: 3px;
+    transition: filter .15s;
+  }
+  .bar-col .bar.zero { background: #e8ecf3; }
+  .bar-col:hover .bar { filter: brightness(1.08); }
+  .bar-col .cap { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .bar-col .num { font-size: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .chart-empty { color: var(--muted); font-size: 12px; padding: 40px 0; text-align: center; width: 100%; }
+
+  /* ---------- table ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; }
+  thead th {
+    text-align: left; font-weight: 600; font-size: 11.5px; color: var(--muted);
+    padding: 9px 12px; background: #f8fafb; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #eef1f4; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfd; }
+  tbody tr.selected { background: #f5f8ff; }
+  .ck { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  .name { font-weight: 600; }
+  .note { font-size: 11.5px; color: var(--muted); max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  .keycell { display: flex; align-items: center; gap: 6px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11.5px; border: 1px solid transparent; white-space: nowrap;
+  }
+  .tag.active { background: var(--ok-soft); color: var(--ok); border-color: #cfe9da; }
+  .tag.disabled { background: #f1f3f5; color: var(--muted); border-color: var(--line-strong); }
+  .tag.expired { background: var(--warn-soft); color: var(--warn); border-color: #f1e0c2; }
+  .muted { color: var(--muted); }
+  .nowrap { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .empty { padding: 40px 12px; text-align: center; color: var(--muted); font-size: 13px; }
+  .empty b { display: block; color: var(--ink-2); font-size: 14px; margin-bottom: 4px; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .search { position: relative; }
+  .search input {
+    height: 34px; width: 230px; padding: 0 12px 0 30px; border-radius: 9px;
+    border: 1px solid var(--line-strong); background: #fff; outline: none;
+  }
+  .search input:focus { border-color: #a9bdf7; box-shadow: 0 0 0 3px rgba(47, 91, 234, .1); }
+  .search svg { position: absolute; left: 9px; top: 9px; width: 15px; height: 15px; color: var(--muted); }
+  .chips { display: inline-flex; background: #eef1f5; border-radius: 9px; padding: 3px; gap: 2px; }
+  .chip {
+    border: none; background: transparent; color: var(--muted); border-radius: 7px;
+    height: 28px; padding: 0 11px; font-size: 12.5px; cursor: pointer;
+  }
+  .chip.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(16,24,40,.08); font-weight: 600; }
+  .bulkbar {
+    display: none; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 10px;
+    background: var(--accent-soft); border: 1px solid #d3ddfb; border-radius: 10px; font-size: 12.5px; color: #24408f;
+  }
+  .bulkbar.show { display: flex; }
+
+  select.mode {
+    height: 32px; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: #fff; padding: 0 8px; font-size: 12.5px;
+  }
+
+  /* ---------- two column ---------- */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  pre.code {
+    margin: 0; padding: 12px 13px; border-radius: 10px; background: #12161d; color: #dfe6f3;
+    font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto;
+  }
+  pre.code .c { color: #7f8ea3; }
+  pre.code .k { color: #8ab4ff; }
+  pre.code .s { color: #9ae6b4; }
+  .fieldlist { display: grid; gap: 9px; margin-bottom: 12px; }
+  .field { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .field .k { width: 74px; color: var(--muted); flex: none; }
+  .field .v { font-family: var(--mono); font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
+  .log-row {
+    display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center;
+    padding: 7px 2px; border-bottom: 1px dashed #eceff3; font-size: 12.5px;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row .t { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+  .log-row .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-row .badge { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: #eef1f5; color: var(--muted); font-family: var(--mono); }
+  .log-row .badge.err { background: var(--danger-soft); color: var(--danger); }
+
+  /* ---------- modal ---------- */
+  .backdrop {
+    position: fixed; inset: 0; background: rgba(15, 20, 28, .38); backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  .backdrop.show { display: flex; }
+  .modal {
+    width: 100%; max-width: 460px; background: #fff; border-radius: 16px; padding: 20px;
+    box-shadow: 0 24px 60px rgba(12, 18, 28, .24); max-height: 88vh; overflow-y: auto;
+  }
+  .modal.wide { max-width: 620px; }
+  .modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal .desc { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  label.fl { display: block; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; font-weight: 600; }
+  .input, .textarea {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 9px; padding: 8px 11px;
+    outline: none; background: #fff;
+  }
+  .input:focus, .textarea:focus { border-color: #a9bdf7; box-shadow: 0 0 0 3px rgba(47, 91, 234, .1); }
+  .textarea { resize: vertical; min-height: 62px; }
+  .formrow { margin-bottom: 13px; }
+  .formrow.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .help { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+
+  .newkeys { display: grid; gap: 8px; margin: 4px 0 0; }
+  .newkey {
+    display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+    background: #f7f9fc; border: 1px solid var(--line); border-radius: 9px;
+  }
+  .newkey .kn { font-size: 12px; color: var(--muted); width: 96px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .newkey code { flex: 1; font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .banner {
+    display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+    background: var(--warn-soft); color: #7a5614; border: 1px solid #f1e0c2; font-size: 12.5px; margin-bottom: 14px;
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px);
+    background: #14181f; color: #f4f6fa; padding: 9px 16px; border-radius: 10px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 80;
+    box-shadow: 0 10px 26px rgba(10, 14, 20, .3); max-width: 80vw;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.err { background: #8f211a; }
+
+  .footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: #9aa2ab; }
+  .footer code { font-family: var(--mono); }
+
+  @media (max-width: 900px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    .search input { width: 160px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark">TA</div>
+      <div>
+        <h1>TeleAgent 网关管理台</h1>
+        <p>本地 OpenAI 兼容反代 · 密钥与调用管理</p>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="kernelPill"><span class="dot"></span><span id="kernelText">连接中…</span></span>
+    <span class="kv">运行 <b id="uptime">—</b></span>
+    <span class="kv">版本 <b id="version">—</b></span>
+    <button class="btn" id="copyBase">复制 Base URL</button>
+  </header>
+
+  <main>
+    <section class="stats">
+      <div class="card stat">
+        <div class="label">密钥总数</div>
+        <div class="value" id="s-total">—</div>
+        <div class="sub" id="s-total-sub">—</div>
+      </div>
+      <div class="card stat">
+        <div class="label">启用中</div>
+        <div class="value" id="s-active">—</div>
+        <div class="sub" id="s-active-sub">—</div>
+      </div>
+      <div class="card stat">
+        <div class="label">今日请求</div>
+        <div class="value" id="s-today">—</div>
+        <div class="sub" id="s-today-sub">—</div>
+      </div>
+      <div class="card stat">
+        <div class="label">累计请求</div>
+        <div class="value" id="s-all">—</div>
+        <div class="sub" id="s-all-sub">—</div>
+        <div class="spark" id="spark"></div>
+      </div>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-head">
+        <h2>近 14 天调用趋势</h2>
+        <span class="hint" id="chartHint"></span>
+      </div>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-head">
+        <h2>API 密钥</h2>
+        <span class="hint">创建后即可在客户端使用；建议按用途分别发一把，方便单独停用</span>
+        <div class="spacer"></div>
+        <label class="kv" for="authMode">鉴权</label>
+        <select class="mode" id="authMode" title="自动：密钥表非空就要求鉴权">
+          <option value="auto">自动</option>
+          <option value="on">强制校验</option>
+          <option value="off">关闭校验</option>
+        </select>
+        <button class="btn primary" id="btnCreate">+ 新建密钥</button>
+      </div>
+
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" placeholder="搜索名称 / 备注 / 密钥" />
+        </div>
+        <div class="chips" id="filters">
+          <button class="chip on" data-f="all">全部</button>
+          <button class="chip" data-f="active">启用</button>
+          <button class="chip" data-f="disabled">已停用</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnRefresh">刷新</button>
+      </div>
+
+      <div class="bulkbar" id="bulkbar">
+        <span id="bulkCount">已选 0 项</span>
+        <div class="spacer"></div>
+        <button class="btn sm" data-bulk="enable">批量启用</button>
+        <button class="btn sm" data-bulk="disable">批量停用</button>
+        <button class="btn sm" data-bulk="reset">重置统计</button>
+        <button class="btn sm danger" data-bulk="delete">批量删除</button>
+        <button class="btn sm ghost" id="clearSel">取消选择</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:34px"><input class="ck" type="checkbox" id="ckAll" /></th>
+              <th>名称</th>
+              <th>密钥</th>
+              <th style="width:96px">状态</th>
+              <th style="width:88px">今日</th>
+              <th style="width:88px">累计</th>
+              <th style="width:140px">最后使用</th>
+              <th style="width:140px">创建时间</th>
+              <th style="width:126px"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="card panel">
+        <div class="panel-head">
+          <h2>接入信息</h2>
+          <div class="spacer"></div>
+          <button class="btn sm" id="copyCurl">复制示例</button>
+        </div>
+        <div class="fieldlist">
+          <div class="field"><span class="k">Base URL</span><span class="v" id="i-base">—</span></div>
+          <div class="field"><span class="k">模型</span><span class="v" id="i-models">—</span></div>
+          <div class="field"><span class="k">鉴权</span><span class="v" id="i-auth">—</span></div>
+        </div>
+        <pre class="code" id="snippet"><span class="c"># 任意 OpenAI 兼容客户端</span>
+<span class="k">base_url</span> = <span class="s">"http://127.0.0.1:8787/v1"</span>
+<span class="k">api_key</span>  = <span class="s">"&lt;在下方新建的密钥&gt;"</span>
+
+<span class="c"># curl 自测</span>
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"authorization: Bearer $TA_KEY"</span> \
+  -d <span class="s">'{"model":"chat-flash","messages":[{"role":"user","content":"hi"}]}'</span></pre>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head">
+          <h2>最近调用</h2>
+          <span class="hint">最多保留 200 条</span>
+        </div>
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="footer">
+    仅本机可访问 · 密钥文件 <code id="fileHint">runtime/config/api-keys.json</code> · <span id="footnote">自用工具，请勿对外暴露</span>
+  </div>
+</div>
+
+<!-- 新建密钥 -->
+<div class="backdrop" id="mCreate">
+  <div class="modal">
+    <h3>新建 API 密钥</h3>
+    <p class="desc">一次可批量生成多把，名称会带序号后缀。</p>
+    <div class="formrow">
+      <label class="fl" for="fName">名称</label>
+      <input class="input" id="fName" placeholder="例如：笔记本 Codex" maxlength="80" />
+    </div>
+    <div class="formrow two">
+      <div>
+        <label class="fl" for="fCount">数量</label>
+        <input class="input" id="fCount" type="number" min="1" max="50" value="1" />
+      </div>
+      <div>
+        <label class="fl" for="fExpire">有效期（天）</label>
+        <input class="input" id="fExpire" type="number" min="0" max="3650" value="0" placeholder="0 = 永久" />
+      </div>
+    </div>
+    <div class="formrow">
+      <label class="fl" for="fNote">备注（可选）</label>
+      <textarea class="textarea" id="fNote" placeholder="用途、归属人、额度说明…" maxlength="500"></textarea>
+    </div>
+    <div class="actions">
+      <button class="btn" data-close="mCreate">取消</button>
+      <button class="btn primary" id="btnDoCreate">生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 生成结果 -->
+<div class="backdrop" id="mCreated">
+  <div class="modal wide">
+    <h3>密钥已生成</h3>
+    <p class="desc">复制保存到客户端。之后仍可在列表里查看与再次复制。</p>
+    <div class="newkeys" id="createdList"></div>
+    <div class="actions">
+      <button class="btn" id="btnDownload">下载 .txt</button>
+      <button class="btn" id="btnCopyAll">复制全部</button>
+      <button class="btn primary" data-close="mCreated">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑密钥 -->
+<div class="backdrop" id="mEdit">
+  <div class="modal">
+    <h3>编辑密钥</h3>
+    <p class="desc">只改元信息，密钥本身不变。</p>
+    <div class="formrow">
+      <label class="fl" for="eName">名称</label>
+      <input class="input" id="eName" maxlength="80" />
+    </div>
+    <div class="formrow">
+      <label class="fl" for="eNote">备注</label>
+      <textarea class="textarea" id="eNote" maxlength="500"></textarea>
+    </div>
+    <div class="formrow">
+      <label class="fl" for="eExpire">有效期（天，0 = 永久）</label>
+      <input class="input" id="eExpire" type="number" min="0" max="3650" />
+      <div class="help" id="eExpireHint"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" data-close="mEdit">取消</button>
+      <button class="btn primary" id="btnDoEdit">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通用确认 -->
+<div class="backdrop" id="mConfirm">
+  <div class="modal">
+    <h3 id="cfTitle">确认操作</h3>
+    <p class="desc" id="cfDesc"></p>
+    <div class="actions">
+      <button class="btn" data-close="mConfirm">取消</button>
+      <button class="btn danger" id="cfOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理令牌 -->
+<div class="backdrop" id="mToken">
+  <div class="modal">
+    <h3>需要管理令牌</h3>
+    <p class="desc">已设置 <code>TA_ADMIN_TOKEN</code>，请输入后再进入管理台。</p>
+    <div class="formrow">
+      <input class="input" id="tInput" type="password" placeholder="TA_ADMIN_TOKEN" />
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="tOk">进入</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var state = null;
+  var selected = new Set();
+  var filter = 'all';
+  var query = '';
+  var editingId = null;
+  var created = [];
+  var confirmAction = null;
+  var token = localStorage.getItem('ta_admin_token') || '';
+  var timer = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+
+  /* ---------- 基础工具 ---------- */
+  function toast(msg, isErr) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.className = 'toast'; }, 2200);
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); resolve(); } catch (e) { reject(e); }
+      document.body.removeChild(ta);
+    });
+  }
+
+  function copy(text, label) {
+    copyText(text).then(function () { toast((label || '已复制') + '：' + text.slice(0, 46) + (text.length > 46 ? '…' : '')); })
+      .catch(function () { toast('复制失败，请手动选择', true); });
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function fmtClock(ts) {
+    var d = new Date(ts);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  function fmtNum(n) { return (n || 0).toLocaleString('zh-CN'); }
+
+  function fmtDuration(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    if (sec < 60) return sec + ' 秒';
+    if (sec < 3600) return Math.floor(sec / 60) + ' 分';
+    if (sec < 86400) return Math.floor(sec / 3600) + ' 时 ' + Math.floor((sec % 3600) / 60) + ' 分';
+    return Math.floor(sec / 86400) + ' 天 ' + Math.floor((sec % 86400) / 3600) + ' 时';
+  }
+
+  function openModal(id) { $(id).classList.add('show'); }
+  function closeModal(id) { $(id).classList.remove('show'); }
+
+  document.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { closeModal(b.getAttribute('data-close')); });
+  });
+  document.querySelectorAll('.backdrop').forEach(function (b) {
+    b.addEventListener('click', function (e) { if (e.target === b) b.classList.remove('show'); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('.backdrop.show').forEach(function (b) { b.classList.remove('show'); });
+  });
+
+  /* ---------- 请求 ---------- */
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = { 'content-type': 'application/json' };
+    if (token) headers['x-admin-token'] = token;
+    return fetch(path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (res.status === 401 && data && data.needToken) {
+          openModal('mToken');
+          throw new Error('需要管理令牌');
+        }
+        if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+        return data;
+      });
+    });
+  }
+
+  function load() {
+    return api('/admin/api/state').then(function (data) {
+      state = data;
+      var alive = new Set(data.keys.map(function (k) { return k.id; }));
+      selected.forEach(function (id) { if (!alive.has(id)) selected.delete(id); });
+      render();
+    }).catch(function (err) {
+      var pill = $('kernelPill');
+      pill.className = 'pill off';
+      $('kernelText').textContent = '未连接：' + err.message;
+    });
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    if (!state) return;
+    renderGateway();
+    renderStats();
+    renderChart();
+    renderTable();
+    renderLog();
+    renderAuthMode();
+  }
+
+  function renderGateway() {
+    var g = state.gateway || {};
+    $('uptime').textContent = fmtDuration(g.uptimeSec || 0);
+    $('version').textContent = g.version || '—';
+    var pill = $('kernelPill');
+    if (g.kernel) {
+      pill.className = 'pill';
+      $('kernelText').textContent = '运行中 · 127.0.0.1:' + g.port;
+    } else {
+      pill.className = 'pill warn';
+      $('kernelText').textContent = 'kernel 未就绪';
+    }
+    $('i-base').textContent = g.baseUrl || '—';
+    $('i-base').title = g.baseUrl || '';
+    $('i-models').textContent = (g.models || []).join(' · ') || '—';
+    $('i-auth').textContent = g.authRequired
+      ? (g.hasEnvKey ? '环境变量 TA_API_KEY + 密钥表' : '密钥表校验（已开启）')
+      : '未开启（本机任意程序可调用）';
+    $('fileHint').textContent = g.keysFile || 'runtime/config/api-keys.json';
+  }
+
+  function renderStats() {
+    var s = state.stats || {};
+    $('s-total').textContent = fmtNum(s.totalKeys);
+    var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    var newToday = (state.keys || []).filter(function (k) { return k.createdAt >= dayStart.getTime(); }).length;
+    $('s-total-sub').textContent = newToday ? '今日新增 ' + newToday + ' 把 · 本地存储' : '今日未新增 · 本地存储';
+    $('s-active').textContent = fmtNum(s.activeKeys);
+    var parts = [];
+    if (s.disabledKeys) parts.push('停用 ' + s.disabledKeys);
+    if (s.expiredKeys) parts.push('过期 ' + s.expiredKeys);
+    $('s-active-sub').textContent = parts.length ? parts.join(' · ') : '全部可用';
+    $('s-today').textContent = fmtNum(s.todayRequests);
+    $('s-today-sub').textContent = '约 ' + fmtNum(s.todayTokens) + ' tokens';
+    $('s-all').textContent = fmtNum(s.totalRequests);
+    var keyCount = (s.totalKeys || 0);
+    var avg = keyCount ? (s.totalRequests || 0) / keyCount : 0;
+    $('s-all-sub').textContent = keyCount
+      ? '平均 ' + (avg >= 10 ? Math.round(avg) : avg.toFixed(1).replace(/\.0$/, '')) + ' 次 / 密钥'
+      : '暂无调用';
+
+    var daily = s.daily || [];
+    var max = Math.max.apply(null, daily.map(function (d) { return d.requests; }).concat([1]));
+    $('spark').innerHTML = daily.map(function (d) {
+      var h = Math.max(2, Math.round((d.requests / max) * 24));
+      return '<i style="height:' + h + 'px" title="' + esc(d.date) + '：' + d.requests + ' 次"></i>';
+    }).join('');
+  }
+
+  function renderChart() {
+    var daily = (state.stats && state.stats.daily) || [];
+    var max = Math.max.apply(null, daily.map(function (d) { return d.requests; }).concat([1]));
+    var total = daily.reduce(function (a, d) { return a + d.requests; }, 0);
+    $('chartHint').textContent = total ? '近 14 天共 ' + fmtNum(total) + ' 次调用' : '';
+    if (!total) {
+      $('chart').innerHTML = '<div class="chart-empty">还没有调用记录。用生成的密钥发一次请求，这里就会出现趋势。</div>';
+      return;
+    }
+    $('chart').innerHTML = daily.map(function (d) {
+      var h = Math.max(3, Math.round((d.requests / max) * 92));
+      var label = d.date.slice(5);
+      return '<div class="bar-col" title="' + esc(d.date) + '：' + d.requests + ' 次 / ' + d.tokens + ' tokens">' +
+        '<span class="num">' + (d.requests || '') + '</span>' +
+        '<div class="bar' + (d.requests ? '' : ' zero') + '" style="height:' + (d.requests ? h : 3) + 'px"></div>' +
+        '<span class="cap">' + esc(label) + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderAuthMode() {
+    var mode = (state.settings && state.settings.requireAuth) || 'auto';
+    $('authMode').value = mode;
+    $('authMode').title = state.gateway && state.gateway.authRequired
+      ? '当前已要求鉴权'
+      : '当前允许匿名调用';
+  }
+
+  function visibleKeys() {
+    var keys = (state && state.keys) || [];
+    var q = query.trim().toLowerCase();
+    return keys.filter(function (k) {
+      if (filter === 'active' && k.status !== 'active') return false;
+      if (filter === 'disabled' && k.status === 'active') return false;
+      if (!q) return true;
+      return (k.name + ' ' + k.note + ' ' + k.key).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function renderTable() {
+    var rows = visibleKeys();
+    var tbody = $('tbody');
+    if (!rows.length) {
+      var all = (state.keys || []).length;
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><b>' +
+        (all ? '没有匹配的密钥' : '还没有密钥') + '</b>' +
+        (all ? '换个关键词或筛选条件试试' : '点右上角「新建密钥」生成第一把，客户端就能用了') +
+        '</div></td></tr>';
+      syncSelection();
+      return;
+    }
+    tbody.innerHTML = rows.map(function (k) {
+      var statusText = k.status === 'active' ? '启用' : (k.status === 'expired' ? '已过期' : '已停用');
+      var sel = selected.has(k.id) ? ' class="selected"' : '';
+      return '<tr data-id="' + k.id + '"' + sel + '>' +
+        '<td><input class="ck row-ck" type="checkbox" data-id="' + k.id + '"' + (selected.has(k.id) ? ' checked' : '') + ' /></td>' +
+        '<td><div class="name">' + esc(k.name) + '</div>' +
+          (k.note ? '<div class="note" title="' + esc(k.note) + '">' + esc(k.note) + '</div>' : '') + '</td>' +
+        '<td><div class="keycell"><span class="mono">' + esc(k.masked) + '</span>' +
+          '<button class="btn icon ghost" data-act="copy" data-id="' + k.id + '" title="复制完整密钥">⧉</button></div></td>' +
+        '<td><span class="tag ' + k.status + '"><span class="dot"></span>' + statusText + '</span></td>' +
+        '<td class="num">' + fmtNum(k.todayRequests) + '</td>' +
+        '<td class="num">' + fmtNum(k.requestCount) + '</td>' +
+        '<td class="muted nowrap">' + fmtTime(k.lastUsedAt) + '</td>' +
+        '<td class="muted nowrap">' + fmtTime(k.createdAt) + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button class="btn sm" data-act="toggle" data-id="' + k.id + '">' + (k.enabled ? '停用' : '启用') + '</button>' +
+          '<button class="btn sm ghost" data-act="edit" data-id="' + k.id + '">编辑</button>' +
+          '<button class="btn sm ghost" data-act="del" data-id="' + k.id + '" title="删除">✕</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('');
+    syncSelection();
+  }
+
+  function renderLog() {
+    var logs = (state.stats && state.stats.recent) || [];
+    if (!logs.length) {
+      $('log').innerHTML = '<div class="empty" style="padding:26px 8px">暂无调用记录</div>';
+      return;
+    }
+    $('log').innerHTML = logs.slice(0, 24).map(function (l) {
+      var ok = l.status >= 200 && l.status < 400;
+      return '<div class="log-row">' +
+        '<span class="t">' + fmtClock(l.ts) + '</span>' +
+        '<span class="m" title="' + esc(l.keyName + ' · ' + l.model + ' · ' + l.protocol) + '">' +
+          esc(l.keyName) + ' <span class="muted">· ' + esc(l.protocol || '—') + '</span></span>' +
+        '<span class="badge' + (ok ? '' : ' err') + '">' + (l.status || 0) + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function syncSelection() {
+    var rows = visibleKeys();
+    var selRows = rows.filter(function (k) { return selected.has(k.id); });
+    $('bulkCount').textContent = '已选 ' + selected.size + ' 项';
+    $('bulkbar').classList.toggle('show', selected.size > 0);
+    var ckAll = $('ckAll');
+    ckAll.checked = rows.length > 0 && selRows.length === rows.length;
+    ckAll.indeterminate = selRows.length > 0 && selRows.length < rows.length;
+  }
+
+  /* ---------- 交互 ---------- */
+  $('ckAll').addEventListener('change', function (e) {
+    var rows = visibleKeys();
+    if (e.target.checked) rows.forEach(function (k) { selected.add(k.id); });
+    else rows.forEach(function (k) { selected.delete(k.id); });
+    renderTable();
+  });
+
+  $('tbody').addEventListener('change', function (e) {
+    var ck = e.target.closest('.row-ck');
+    if (!ck) return;
+    var id = ck.getAttribute('data-id');
+    if (ck.checked) selected.add(id); else selected.delete(id);
+    renderTable();
+  });
+
+  $('tbody').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-id');
+    var key = (state.keys || []).find(function (k) { return k.id === id; });
+    if (!key) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'copy') return copy(key.key, '密钥已复制');
+    if (act === 'toggle') return patchKey(id, { enabled: !key.enabled });
+    if (act === 'edit') return startEdit(key);
+    if (act === 'del') {
+      return confirmDo('删除密钥「' + key.name + '」？', '删除后该密钥立即失效且无法恢复。', function () {
+        return api('/admin/api/keys/' + id, { method: 'DELETE' }).then(function (d) {
+          selected.delete(id);
+          state = d.state;
+          render();
+          toast('已删除');
+        });
+      });
+    }
+  });
+
+  $('clearSel').addEventListener('click', function () { selected.clear(); renderTable(); });
+
+  $('filters').addEventListener('click', function (e) {
+    var chip = e.target.closest('.chip');
+    if (!chip) return;
+    filter = chip.getAttribute('data-f');
+    document.querySelectorAll('#filters .chip').forEach(function (c) { c.classList.toggle('on', c === chip); });
+    renderTable();
+  });
+
+  var qTimer = null;
+  $('q').addEventListener('input', function (e) {
+    query = e.target.value;
+    clearTimeout(qTimer);
+    qTimer = setTimeout(renderTable, 120);
+  });
+
+  document.querySelectorAll('[data-bulk]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var action = btn.getAttribute('data-bulk');
+      var ids = Array.from(selected);
+      if (!ids.length) return;
+      var labels = { enable: '启用', disable: '停用', delete: '删除', reset: '重置统计' };
+      var run = function () {
+        return api('/admin/api/keys/bulk', { method: 'POST', body: { action: action, ids: ids } }).then(function (d) {
+          if (action === 'delete') ids.forEach(function (id) { selected.delete(id); });
+          state = d.state;
+          render();
+          toast(labels[action] + '成功：' + d.affected + ' 项');
+        });
+      };
+      if (action === 'delete') {
+        confirmDo('删除 ' + ids.length + ' 把密钥？', '删除后这些密钥立即失效，且不可恢复。', run);
+      } else {
+        run().catch(function (err) { toast(err.message, true); });
+      }
+    });
+  });
+
+  $('authMode').addEventListener('change', function (e) {
+    var mode = e.target.value;
+    api('/admin/api/settings', { method: 'POST', body: { requireAuth: mode } }).then(function (d) {
+      state = d.state;
+      render();
+      toast('鉴权模式已切换');
+    }).catch(function (err) {
+      toast(err.message, true);
+      renderAuthMode();
+    });
+  });
+
+  function patchKey(id, patch) {
+    return api('/admin/api/keys/' + id, { method: 'PATCH', body: patch }).then(function (d) {
+      state = d.state;
+      render();
+    }).catch(function (err) { toast(err.message, true); });
+  }
+
+  /* ---------- 新建 ---------- */
+  $('btnCreate').addEventListener('click', function () {
+    $('fName').value = '';
+    $('fCount').value = '1';
+    $('fExpire').value = '0';
+    $('fNote').value = '';
+    openModal('mCreate');
+    setTimeout(function () { $('fName').focus(); }, 30);
+  });
+
+  $('btnDoCreate').addEventListener('click', function () {
+    var name = $('fName').value.trim();
+    if (!name) { toast('请填写名称', true); return; }
+    var body = {
+      name: name,
+      count: Number($('fCount').value) || 1,
+      expiresInDays: Number($('fExpire').value) || 0,
+      note: $('fNote').value.trim(),
+    };
+    var btn = $('btnDoCreate');
+    btn.disabled = true;
+    api('/admin/api/keys', { method: 'POST', body: body }).then(function (d) {
+      created = d.created || [];
+      state = d.state;
+      closeModal('mCreate');
+      renderCreated();
+      openModal('mCreated');
+      render();
+    }).catch(function (err) {
+      toast(err.message, true);
+    }).finally(function () { btn.disabled = false; });
+  });
+
+  function renderCreated() {
+    $('createdList').innerHTML = created.map(function (k) {
+      return '<div class="newkey"><span class="kn" title="' + esc(k.name) + '">' + esc(k.name) + '</span>' +
+        '<code>' + esc(k.key) + '</code>' +
+        '<button class="btn sm ghost" data-copy="' + esc(k.key) + '">复制</button></div>';
+    }).join('');
+  }
+
+  $('createdList').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-copy]');
+    if (btn) copy(btn.getAttribute('data-copy'), '已复制');
+  });
+
+  $('btnCopyAll').addEventListener('click', function () {
+    var text = created.map(function (k) { return k.name + '\t' + k.key; }).join('\n');
+    copy(text, '已复制 ' + created.length + ' 把密钥');
+  });
+
+  $('btnDownload').addEventListener('click', function () {
+    var text = '# TeleAgent 网关密钥\n# 生成时间：' + new Date().toLocaleString('zh-CN') + '\n\n' +
+      created.map(function (k) { return k.name + '\t' + k.key; }).join('\n') + '\n';
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'teleagent-keys-' + Date.now() + '.txt';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  /* ---------- 编辑 ---------- */
+  function startEdit(key) {
+    editingId = key.id;
+    $('eName').value = key.name;
+    $('eNote').value = key.note || '';
+    $('eExpire').value = '';
+    $('eExpireHint').textContent = key.expiresAt
+      ? '当前到期：' + fmtTime(key.expiresAt) + '（留空不修改）'
+      : '当前为永久有效（留空不修改）';
+    openModal('mEdit');
+    setTimeout(function () { $('eName').focus(); }, 30);
+  }
+
+  $('btnDoEdit').addEventListener('click', function () {
+    if (!editingId) return;
+    var patch = { name: $('eName').value.trim() || '未命名密钥', note: $('eNote').value.trim() };
+    var days = $('eExpire').value;
+    if (days !== '' && Number(days) >= 0) patch.expiresInDays = Number(days);
+    api('/admin/api/keys/' + editingId, { method: 'PATCH', body: patch }).then(function (d) {
+      state = d.state;
+      closeModal('mEdit');
+      render();
+      toast('已保存');
+    }).catch(function (err) { toast(err.message, true); });
+  });
+
+  /* ---------- 确认 ---------- */
+  function confirmDo(title, desc, action) {
+    $('cfTitle').textContent = title;
+    $('cfDesc').textContent = desc;
+    confirmAction = action;
+    openModal('mConfirm');
+  }
+
+  $('cfOk').addEventListener('click', function () {
+    var fn = confirmAction;
+    confirmAction = null;
+    closeModal('mConfirm');
+    if (!fn) return;
+    Promise.resolve().then(fn).catch(function (err) { toast(err.message, true); });
+  });
+
+  /* ---------- 令牌 ---------- */
+  $('tOk').addEventListener('click', function () {
+    token = $('tInput').value.trim();
+    if (!token) return;
+    localStorage.setItem('ta_admin_token', token);
+    closeModal('mToken');
+    load();
+  });
+
+  /* ---------- 头部按钮 ---------- */
+  $('btnRefresh').addEventListener('click', function () {
+    load().then(function () { toast('已刷新'); });
+  });
+
+  $('copyBase').addEventListener('click', function () {
+    if (state && state.gateway) copy(state.gateway.baseUrl, 'Base URL 已复制');
+  });
+
+  $('copyCurl').addEventListener('click', function () {
+    if (!state) return;
+    var first = (state.keys || []).find(function (k) { return k.enabled; });
+    var key = first ? first.key : '<你的密钥>';
+    var text = 'curl ' + state.gateway.baseUrl + '/chat/completions \\\n' +
+      '  -H "content-type: application/json" \\\n' +
+      '  -H "authorization: Bearer ' + key + '" \\\n' +
+      '  -d \'{"model":"' + ((state.gateway.models || ['chat-flash'])[0]) + '","messages":[{"role":"user","content":"hi"}]}\'';
+    copy(text, '示例已复制（含密钥）');
+  });
+
+  /* ---------- 轮询 ---------- */
+  load();
+  timer = setInterval(function () {
+    if (document.hidden) return;
+    if (document.querySelector('.backdrop.show')) return;
+    load();
+  }, 10000);
+})();
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@
 //   TA_PORT=9000 node server.mjs       # 换端口
 //   TA_API_KEY=sk-local node server.mjs # 要求客户端带 Bearer
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveOwner, accountDir, tokenFile, readJson, kernelVersion, ensureTeleAgentLayout } from './lib/paths.mjs';
 import { loadAuthState, deviceMeta } from './lib/auth.mjs';
@@ -13,6 +14,7 @@ import { startKernel } from './lib/kernel.mjs';
 import { createToolBridge } from './lib/toolbridge.mjs';
 import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
+import { createKeyStore } from './lib/keystore.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const missing = ensureTeleAgentLayout();
@@ -45,6 +47,11 @@ console.log(`[teleagent] 账号 ${auth.claims?.accountName ?? '?'} · kernel ${k
 const runtimeRoot = path.join(here, 'runtime');
 const authState = { token: auth.token, deviceId: meta.deviceId, installId: meta.installId };
 
+// API Key 表：默认 runtime/config/api-keys.json（TA_KEYS_FILE 可改），管理台在这里增删
+const keystore = createKeyStore({ file: process.env.TA_KEYS_FILE || path.join(runtimeRoot, 'config', 'api-keys.json') });
+const adminToken = process.env.TA_ADMIN_TOKEN || null;
+
+console.log('[teleagent] 正在启动 kernel（首次约需 1–2 分钟）…');
 let kernel = await startKernel({ runtimeRoot, auth: authState, catalog });
 await kernel.waitReady({ timeoutMs: 90000 });
 
@@ -80,6 +87,8 @@ const shim = await createShim({
   bridge,
   models,
   apiKey: process.env.TA_API_KEY || null,
+  keystore,
+  adminToken,
   port: Number(process.env.TA_PORT || 8787),
 });
 resetSessions = () => {
@@ -89,13 +98,33 @@ resetSessions = () => {
 
 console.log(`[teleagent] OpenAI 兼容端点: ${shim.url}`);
 console.log(`[teleagent] 模型: ${models.map((m) => m.id).join(', ')}`);
-if (process.env.TA_API_KEY) console.log('[teleagent] 已启用 Bearer 校验');
+if (process.env.TA_API_KEY) console.log('[teleagent] 已启用 Bearer 校验（环境变量 TA_API_KEY）');
+const keyStats = keystore.stats();
+console.log(`[teleagent] API 密钥: ${keyStats.activeKeys} 启用 / ${keyStats.totalKeys} 总数 · ${keystore.file}`);
+console.log(`[teleagent] 管理台: http://127.0.0.1:${shim.port}/admin${adminToken ? '（需要 TA_ADMIN_TOKEN）' : ''}`);
+// start.cmd 会带上 TA_OPEN_ADMIN=1：服务就绪后自动打开管理台
+if (process.env.TA_OPEN_ADMIN === '1') {
+  const adminUrl = `http://127.0.0.1:${shim.port}/admin`;
+  try {
+    const child =
+      process.platform === 'win32'
+        ? spawn('cmd', ['/c', 'start', '', adminUrl], { windowsHide: true, stdio: 'ignore' })
+        : spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [adminUrl], { stdio: 'ignore' });
+    child.on('error', () => {});
+    child.unref();
+  } catch {}
+}
+
+if (!keystore.required(process.env.TA_API_KEY || null)) {
+  console.log('[teleagent] 提示: 当前未开启鉴权，本机任意程序都可调用。可在管理台新建密钥或把鉴权设为「强制校验」。');
+}
 
 let closing = false;
 async function shutdown() {
   if (closing) return;
   closing = true;
   console.log('\n[teleagent] 正在关闭…');
+  keystore.flush();
   await shim.close();
   await bridge.close().catch(() => {});
   kernel.close();
@@ -103,5 +132,10 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('exit', () => kernel.close());
+process.on('exit', () => {
+  try {
+    keystore.flush();
+  } catch {}
+  kernel.close();
+});
 

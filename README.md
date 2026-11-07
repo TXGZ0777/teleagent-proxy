@@ -41,7 +41,11 @@ node server.mjs
 [teleagent] 账号 <你的昵称> · kernel 3.0.0-dev-...
 [teleagent] OpenAI 兼容端点: http://127.0.0.1:8787/v1
 [teleagent] 模型: chat-pro, chat-flagship, chat-flash
+[teleagent] API 密钥: 0 启用 / 0 总数 · ...\runtime\config\api-keys.json
+[teleagent] 管理台: http://127.0.0.1:8787/admin
 ```
+
+浏览器打开 **http://127.0.0.1:8787/admin** 就是管理台：建密钥、批量停用/删除、看调用量。
 
 前置条件（缺一不可）：
 
@@ -223,7 +227,13 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 | POST | `/v1/responses` | Responses 协议（Codex CLI），流式事件完整 |
 | POST | `/v1/messages` | Anthropic Messages 协议（Claude Code / CC Switch） |
 | POST | `/v1/messages/count_tokens` | 粗略 token 估算 |
-| GET | `/healthz` | 代理与 kernel 状态 |
+| GET | `/healthz` | 代理与 kernel 状态（含鉴权开关、启用密钥数） |
+| GET | `/admin` | Web 管理台（仅回环地址，见下节） |
+| GET | `/admin/api/state` | 管理台数据快照：网关状态、密钥表、统计 |
+| POST | `/admin/api/keys` | 新建密钥（支持 `count` 批量） |
+| PATCH / DELETE | `/admin/api/keys/:id` | 改名/备注/有效期/启停、删除单把 |
+| POST | `/admin/api/keys/bulk` | 批量 `enable` / `disable` / `reset` / `delete` |
+| POST | `/admin/api/settings` | 切换鉴权模式 `auto` / `on` / `off` |
 
 行为约定：
 
@@ -231,6 +241,29 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 - 非流式：聚合后一次返回，同样带 `reasoning_content` 与 `usage`
 - 错误：HTTP 4xx/5xx + `{error:{message,type,code}}`；额度不足统一成 `insufficient quota`
 - 会话：按 `user` 字段或「首条用户消息」指纹复用 kernel 会话，6 小时 TTL；kernel 侧保留历史
+
+## 管理台（Web 图形界面）
+
+浏览器打开 `http://127.0.0.1:8787/admin`（访问根路径 `/` 会自动跳转）。单文件页面，
+不依赖 CDN，离线可用。
+
+能做的事：
+
+| 区域 | 功能 |
+|---|---|
+| 概览 | 密钥总数 / 启用中 / 今日请求 / 累计请求，今日新增与服务状态 |
+| 趋势 | 近 14 天调用次数柱状图（悬停看当天 tokens） |
+| 密钥表 | 生成、复制、改名、备注、设置有效期（天，0=永久）、单把停用/删除 |
+| 批量 | 勾选多把 → 批量启用 / 批量停用 / 重置统计 / 批量删除 |
+| 鉴权 | `自动`（密钥表非空即校验）/ `强制校验` / `关闭校验`，即时生效 |
+| 流水 | 最近 200 条调用（密钥、协议、状态码、耗时） |
+
+密钥保存在 `runtime/config/api-keys.json`（`runtime/` 已被 gitignore），可以直接备份/迁移。
+生成时明文只在这一屏集中展示，之后在列表里也能复制。
+
+> 安全：管理台只接受**回环地址**访问。想让管理接口也要令牌，启动前设
+> `TA_ADMIN_TOKEN=xxx`，页面会提示输入（存在浏览器 localStorage，只影响管理接口，
+> 不影响 `/v1` 调用）。环境变量 `TA_API_KEY` 依然可以作为一把「主密钥」长期使用。
 
 ## 身份与系统提示词（重要）
 
@@ -266,7 +299,9 @@ Codex > 我是 Codex（运行在终端里的编程助手）……
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `TA_PORT` | `8787` | 本地监听端口（只绑 127.0.0.1） |
-| `TA_API_KEY` | 空 | 设置后要求 `Authorization: Bearer` 或 `x-api-key` |
+| `TA_API_KEY` | 空 | 设置后要求 `Authorization: Bearer` 或 `x-api-key`（作为主密钥，与管理台生成的密钥并存） |
+| `TA_KEYS_FILE` | `runtime/config/api-keys.json` | 管理台维护的密钥表路径 |
+| `TA_ADMIN_TOKEN` | 空 | 设置后 `/admin/api/*` 需要令牌（页面会提示输入） |
 | `TA_DEFAULT_MODEL` | 目录第一个 | 客户端模型名匹配不上时的兜底 |
 | `TA_ALLOW_KERNEL_TOOLS` | 关 | 设为 `1` 才放行 kernel 自带的 bash/read/write 等工具（默认全禁） |
 | `TA_GATEWAY_KEY` | — | 上游 gateway key（见「获取上游 gateway key」） |
@@ -307,7 +342,8 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 - **工具中继只做了 Responses（Codex）这一路**：`/v1/chat/completions` 与 `/v1/messages` 仍然忽略 `tools`。
   Claude Code 要能改文件，需要把 Anthropic 的 `tool_use`/`tool_result` 接到同一套桥（工作量不大，但没做）。
 - **并行工具调用未验证**：一次返回多个 `function_call` 时按顺序下发，客户端会逐个执行。
-- **文件水印**：kernel 的 eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（默认不会出现）；如自行放行 kernel 工具需注意。
+- **文件水印**：kernel 的 
+eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（默认不会出现）；如自行放行 kernel 工具需注意。
 - **每轮固定开销**：kernel 会带自己的系统提示词与工具 schema（实测单轮 ~1.0–1.2 万 input tokens），
   按 `chat-flash` x0.2 计也不便宜；工具多轮时每轮都要重发。
 - **依赖桌面端登录**：JWT 过期（约 30 天）后需在桌面端重新登录；换账号后重启代理即可。
@@ -316,11 +352,13 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 
 ## 版本
 
-当前版本 **0.2.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.3.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 
-- 只监听 `127.0.0.1`；建议设 `TA_API_KEY`，避免同机其他程序白嫖你的额度
+- 只监听 `127.0.0.1`；在管理台新建密钥（或设 `TA_API_KEY`）即可要求鉴权，避免同机其他程序白嫖你的额度
+- 密钥表是明文 JSON（`runtime/config/api-keys.json`），只在本机、已在 gitignore 内；需要更强隔离可设 `TA_ADMIN_TOKEN`
+- 管理台仅回环可访问，但仍不建议把 8787 端口通过内网穿透/反代暴露出去
 - 登录态只在进程内存中出现；含 token 的临时 payload 在 kernel 就绪后立即删除
 - 这是**自用**工具：不要对外暴露、不要分发账号额度、不要用于绕过计费。
   与官方客户端相比，请求节奏、system 提示词、工具集合都不同，请自行评估账号风险。
@@ -338,6 +376,9 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 | `lib/toolbridge.mjs` | 工具桥：挂载、挂起、放行、内置工具开关 |
 | `lib/mcp-server.mjs` | 最小 MCP 服务端（Streamable HTTP） |
 | `lib/anthropic.mjs` | Anthropic Messages 适配（Claude Code / CC Switch） |
+| `lib/keystore.mjs` | API 密钥表：生成、校验、批量操作、按密钥计量 |
+| `lib/admin.mjs` | 管理台页面与 `/admin/api/*` 接口 |
+| `web/admin.html` | 管理台单页（原生 JS，无外部依赖） |
 | `lib/paths.mjs` | TeleAgent 目录探测 |
 | `tools/doctor.mjs` | 环境自检 |
 | `tools/ccswitch-provider.mjs` | 把本网关注册成 CC Switch 供应商（`--app claude|codex`） |
