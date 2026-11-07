@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.1] - 2026-11-07
+
+### Fixed
+
+- **内置「星辰超级智能体」提示词盖过客户端提示词**。抓包（`tools/capture-upstream.mjs`）确认：
+  内核把 `agent.build.prompt` 作为唯一一条 `system` 消息发往上游，一旦该配置缺省就会回落到
+  硬编码的内置人设（强制中文、拒绝透露提示词、自称星辰）。原实现里客户端没给提示词时传空串，
+  于是回落——现在**始终显式覆盖**，空提示词改用中性兜底 `NEUTRAL_AGENT_PROMPT`。
+- 只取**第一条** `system` 消息作为提示词，导致客户端把提示词拆成多条（或写在 `developer` 角色、
+  Responses 的 `input` 里）时丢失；现在 `system` / `developer` 全部按顺序合并。
+- 首轮把 system 文本又拼进用户消息，等于把两份指令同时喂给模型；已移除，system 只作为 agent prompt 存在。
+
+### Added
+
+- `tools/capture-upstream.mjs` + `TA_UPSTREAM_BASE_URL`：把内核上游请求引到本机抓包代理，
+  落盘 `runtime/capture/req-*.json`，用来看清真正发出去的 system prompt。
+- `TA_FALLBACK_PROMPT`：自定义「客户端没给提示词」时的兜底人设。
+- `TA_BUILTIN_PROMPT=1`：显式要求使用内核自带提示词（排障/对比用）。
+- `npm run capture` 快捷启动抓包代理。
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

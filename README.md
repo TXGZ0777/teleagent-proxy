@@ -265,34 +265,57 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 > `TA_ADMIN_TOKEN=xxx`，页面会提示输入（存在浏览器 localStorage，只影响管理接口，
 > 不影响 `/v1` 调用）。环境变量 `TA_API_KEY` 依然可以作为一把「主密钥」长期使用。
 
-## 身份与系统提示词（重要）
+## 提示词优先级（重要）
 
-kernel 内置的系统提示词把模型钉死成「星辰超级智能体（TeleAgent）」。实测：**在对话里声明
-“你是 Codex”没用**，模型会明确拒绝改身份（“这是无法通过对话指令更改的设定”）。
+### 三层提示词，只有一层能由客户端决定
 
-唯一生效的办法是在**启动 kernel 时**用配置覆盖 agent 提示词：
+| 层 | 来源 | 能否覆盖 |
+|---|---|---|
+| 内置人设 | 硬编码在 kernel 二进制里（`You are 星辰超级智能体（TeleAgent）…`，含 `# Security`、`# Language and style` 等分节） | 只能启动时替换，对话里说什么都没用 |
+| agent 提示词 | `agent.build.prompt`（就是网关塞进去的那层） | **完全可替换** |
+| 环境块 | kernel 自动追加在 system 末尾（模型名、工作目录、平台、日期） | 不可去掉，但只是环境信息 |
 
-```jsonc
-{ "default_agent": "build", "agent": { "build": { "prompt": "…" } } }
+抓包实证（`npm run capture` 后看 `runtime/capture/req-*.json`）：内核**只用一条** `system` 消息，
+内容是 `agent.build.prompt` + 环境块。所以只要这层被替换，模型就不会再自称星辰。
+
+### 曾经的坑：空提示词会回落
+
+旧实现把客户端的提示词直接当 `agent.build.prompt` 传，客户端没给时传的是**空串**，
+配置里于是没有 `agent.build.prompt` 字段 —— 内核立刻回落到内置人设，于是出现：
+
+```
+用户 > 你是谁？
+模型 > 我是星辰超级智能体（TeleAgent），一个协助完成日常办公与软件工程任务的子智能体。
 ```
 
-所以网关按客户端自动选提示词：
+修复后：**始终显式设置** `agent.build.prompt`。客户端给了就用客户端的，没给用中性兜底
+`You are a helpful assistant serving an API client.`，绝不落到内置人设。
 
-| 客户端 | 取哪段当系统提示词 |
+### 取哪段作为客户端提示词
+
+| 客户端 | 取哪些字段 |
 |---|---|
-| Codex（`/v1/responses`） | 请求里的 `instructions` |
-| Claude Code（`/v1/messages`） | 请求里的 `system` |
-| OpenAI 兼容（`/v1/chat/completions`） | 首条 `system` 消息 |
+| Codex（`/v1/responses`） | `instructions` + `input` 里的 `developer` / `system` 消息（按顺序拼接） |
+| Claude Code（`/v1/messages`） | `system`（字符串或 text block 数组，全部拼上） |
+| OpenAI 兼容（`/v1/chat/completions`） | **所有** `system` 与 `developer` 消息（不再只取第一条） |
+
+同时，system 文本**不会**再被拼进首轮用户消息 —— 它已经作为内核的 system 消息存在，
+复述一遍等于给模型两份互相竞争的指令。
 
 提示词指纹变了会**换一个 kernel**（约 2 秒，会话映射同时清空；客户端本身每轮都会重放历史，
 Codex / Claude Code 不受影响）。工具调用挂起期间不会切换，避免打断工具循环。
 
-实测效果：
+### 想改行为时
 
-```
-你 > 你是谁？
-Codex > 我是 Codex（运行在终端里的编程助手）……
-```
+| 环境变量 | 作用 |
+|---|---|
+| `TA_FALLBACK_PROMPT` | 客户端没给提示词时的兜底人设（默认中性助手） |
+| `TA_BUILTIN_PROMPT=1` | 显式使用内核自带的星辰人设（排障 / 对比用） |
+| `TA_UPSTREAM_BASE_URL` | 把上游指向本机抓包代理，验证实际发出的 system |
+
+排查方法：`npm run capture` 起代理 → 另开一个终端
+`TA_UPSTREAM_BASE_URL=http://127.0.0.1:9909/superCowork/sapi/api/v1 node server.mjs` → 发一次请求 →
+看 `runtime/capture/req-*.json` 里的 `messages[0]`。
 
 ## 配置
 
@@ -302,6 +325,9 @@ Codex > 我是 Codex（运行在终端里的编程助手）……
 | `TA_API_KEY` | 空 | 设置后要求 `Authorization: Bearer` 或 `x-api-key`（作为主密钥，与管理台生成的密钥并存） |
 | `TA_KEYS_FILE` | `runtime/config/api-keys.json` | 管理台维护的密钥表路径 |
 | `TA_ADMIN_TOKEN` | 空 | 设置后 `/admin/api/*` 需要令牌（页面会提示输入） |
+| `TA_FALLBACK_PROMPT` | 中性助手 | 客户端没给系统提示词时的兜底人设 |
+| `TA_BUILTIN_PROMPT` | 关 | 设为 `1` 使用内核自带的星辰人设（排障用） |
+| `TA_UPSTREAM_BASE_URL` | 官方上游 | 覆盖上游地址，指向本机抓包代理 |
 | `TA_DEFAULT_MODEL` | 目录第一个 | 客户端模型名匹配不上时的兜底 |
 | `TA_ALLOW_KERNEL_TOOLS` | 关 | 设为 `1` 才放行 kernel 自带的 bash/read/write 等工具（默认全禁） |
 | `TA_GATEWAY_KEY` | — | 上游 gateway key（见「获取上游 gateway key」） |
@@ -352,7 +378,7 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 
 ## 版本
 
-当前版本 **0.3.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.3.1**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 
@@ -385,6 +411,7 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 | `examples/codex-config.toml` | Codex 直连本网关的配置样例 |
 | `tools/probe-kernel.mjs` | 最小链路探针（不经过 shim） |
 | `tools/probe-tools.mjs` | 工具注册表探针（验证 MCP 挂载与内置工具开关） |
+| `tools/capture-upstream.mjs` | 抓包代理：把上游请求原样转发并落盘，用于核对 system prompt |
 | `tools/asar.mjs` / `slice.mjs` | 读客户端 `app.asar`（逆向用） |
 | `notes/` | 逆向时截下来的客户端源码片段 |
 
