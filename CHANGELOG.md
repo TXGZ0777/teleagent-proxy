@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.4.0] - 2026-11-16
+
+### Added
+
+- **内核池（并发对话互踢修复）**：提示词指纹相同的并发请求此前共用同一个 kernel，
+  后到的会踢掉在途对话（上游 `terminated`）。现在按 `client + 提示词哈希` 池化 kernel：
+  命中即复用、不 close；LRU 上限 `TA_KERNEL_POOL_MAX`（默认 6），只淘汰闲置超过 10 分钟的实例；
+  非 default 实例用独立 `data--k1/k2/...` 目录隔离 data/config/logs，default 实例保持原 `runtime/data`。
+  实测 Pro 与 Flash 两个内核同时在途、同对话跨轮复用同一内核同一 sessionID、单内核多会话并发零串台。
+- **三协议工具中继打通**：此前只有 `/v1/responses`（Codex CLI）能把 `tools` 挂成 kernel 侧 MCP 工具，
+  现在三条协议共用同一套桥（挂起 → 取走 → 客户端执行 → 下一轮放行 → 续跑）：
+  - `/v1/chat/completions`：`tools`（type:function）挂桥，模型调用翻成 `tool_calls`
+    （非流式 `finish_reason:"tool_calls"`；流式 `delta.tool_calls` 分块），
+    客户端回填 `role:"tool"` 消息后放行续跑。
+  - `/v1/messages`（Anthropic）：`tools`（input_schema）挂桥，模型调用翻成 `tool_use` 块
+    （非流式 `stop_reason:"tool_use"`；流式 `content_block_start` → `input_json_delta` → `content_block_stop`），
+    客户端回填 `tool_result` 块后放行续跑；调用 id 双向前缀互转（`call_*` ↔ `toolu_*`）。
+  - `metadata.user_id` 计入 Anthropic 会话指纹，避免同客户端不同账号串会话。
+  - 无工具轮次且 kernel 挂过工具时，下发的工具开关表全置 `false`（含 MCP 工具），防止模型凭空调用；
+    首轮导入历史时折叠 `tool` / `tool_result` 消息，工具结果不再丢失。
+- chat / messages 两路通过假内核冒烟测试（20/20：发起、取走、放行、续跑、流式/非流式全链路）；
+  真客户端（Claude Code 改文件）待实测。
+
+### Fixed
+
+- 并发对话互踢导致的 `upstream_error: terminated`（见内核池）。
+- `GET /v1/models` 忽略查询串：DSH 的 anthropic 协议模型列举带 `?limit=1000`，
+  此前严格等值匹配 `req.url` 会 404；现改用剥查询串后的 `urlPath` 比较。
+
 ## [0.3.2] - 2026-11-07
 
 ### Added

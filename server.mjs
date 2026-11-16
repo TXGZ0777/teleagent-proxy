@@ -91,54 +91,112 @@ async function verifyKernelPrompt(target, expected) {
 const keystore = createKeyStore({ file: process.env.TA_KEYS_FILE || path.join(runtimeRoot, 'config', 'api-keys.json') });
 const adminToken = process.env.TA_ADMIN_TOKEN || null;
 
+// 内核池：按「客户端 + 提示词指纹」缓存常驻内核。并发对话提示词不同时让各内核共存，
+// 而不是 close/start 抢同一个内核 —— 后者正是「两个对话来回切内核 → terminated → 重发全量」的根源。
+const kernelPool = new Map(); // key -> { kernel, info, lastUsed, dataTag }
+const KERNEL_POOL_MAX = Number(process.env.TA_KERNEL_POOL_MAX || 6); // 池上限，防止提示词微调导致无限建内核
+let kernelSeq = 0;
+let currentKernel = null;     // 最近使用的内核，供 healthz / 关停用
+let getKernelChain = Promise.resolve();
+let resetSessions = () => {};
+
 console.log('[teleagent] 正在启动 kernel（首次约需 1–2 分钟）…');
-let kernel = await startKernel({ runtimeRoot, auth: authState, catalog });
-await kernel.waitReady({ timeoutMs: 90000 });
-kernelInfo = { client: 'neutral', ...(await verifyKernelPrompt(kernel, NEUTRAL_AGENT_PROMPT)) };
+const defaultKernel = await startKernel({ runtimeRoot, auth: authState, catalog });
+await defaultKernel.waitReady({ timeoutMs: 90000 });
+const defaultInfo = { client: 'neutral', ...(await verifyKernelPrompt(defaultKernel, NEUTRAL_AGENT_PROMPT)) };
+kernelInfo = defaultInfo;
+currentKernel = defaultKernel;
+kernelPool.set('default', { kernel: defaultKernel, info: defaultInfo, lastUsed: Date.now() });
 console.log(`[teleagent] 内核提示词：中性兜底 · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`);
 
-const bridge = await createToolBridge({ kernel });
+const bridge = await createToolBridge({ kernel: defaultKernel });
 
 /**
- * 按客户端切换 kernel 的 agent prompt。
- *
- * kernel 内置的系统提示词把模型钉死成「星辰超级智能体」，对话里怎么声明自己是 Codex 都没用
- * （实测会被拒绝）。唯一生效的办法是启动时用 `agent.build.prompt` 替换它，
- * 所以这里按「客户端类型 + 提示词指纹」维护一个当前 kernel：变了就换内核。
+ * LRU 淘汰：池满时关掉「闲置超过 10 分钟」的非默认内核，避免提示词微调导致内核无限增长。
+ * 只淘汰闲置的，绝不打断正在进行的对话；全都在用时宁可暂时超限。
+ * 被淘汰内核的 sessionID 随之失效，所以一并清空会话映射（下次会重建会话）。
  */
-let kernelKey = 'default';
-let resetSessions = () => {};
-async function getKernel({ key, prompt }) {
-  if (key === kernelKey) return kernel;
-  if (bridge.hasCalls()) return kernel; // 工具循环进行中，先不换，避免打断挂起调用
-  const client = key.split(':')[0];
-  const chars = (prompt ?? '').trim().length;
-  console.log(`[teleagent] 切换 kernel 提示词：${kernelKey} → ${key}（${client}，${chars} 字符）`);
-  try {
-    kernel.close();
-  } catch {}
-  kernel = await startKernel({ runtimeRoot, auth: authState, catalog, agentPrompt: prompt });
-  await kernel.waitReady({ timeoutMs: 90000 });
-  kernelKey = key;
-  kernelInfo = { client, ...(await verifyKernelPrompt(kernel, prompt)) };
-  console.log(
-    `[teleagent] 内核提示词：${client} · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`,
-  );
-  bridge.attach(kernel);
-  resetSessions();
-  return kernel;
+function evictStaleKernels(keepKey) {
+  if (kernelPool.size <= KERNEL_POOL_MAX) return;
+  const idleMs = 10 * 60 * 1000;
+  const now = Date.now();
+  const victims = [...kernelPool.entries()]
+    .filter(([k, v]) => k !== 'default' && k !== keepKey && now - v.lastUsed > idleMs)
+    .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+  let evicted = false;
+  while (kernelPool.size > KERNEL_POOL_MAX && victims.length) {
+    const [key, entry] = victims.shift();
+    kernelPool.delete(key);
+    try {
+      entry.kernel.close();
+    } catch {}
+    evicted = true;
+    console.log(`[teleagent] 内核池淘汰 ${key}（闲置 ${Math.round((now - entry.lastUsed) / 60000)} 分钟，池内 ${kernelPool.size} 个）`);
+  }
+  if (evicted) resetSessions();
 }
 
-const shim = await createShim({
-  getKernel,
-  kernelStatus: () => ({ origin: kernel.origin, ...kernelInfo }),
-  bridge,
-  models,
-  apiKey: process.env.TA_API_KEY || null,
-  keystore,
-  adminToken,
-  port: Number(process.env.TA_PORT || 8787),
-});
+async function createKernelFor(key, prompt) {
+  const client = key.split(':')[0];
+  const chars = (prompt ?? '').trim().length;
+  const dataTag = `k${++kernelSeq}`;
+  console.log(`[teleagent] 新建内核 ${key}（${client}，${chars} 字符，dataTag=${dataTag}）；池内共 ${kernelPool.size + 1} 个`);
+  const k = await startKernel({ runtimeRoot, dataTag, auth: authState, catalog, agentPrompt: prompt });
+  await k.waitReady({ timeoutMs: 90000 });
+  const info = { client, ...(await verifyKernelPrompt(k, prompt)) };
+  console.log(
+    `[teleagent] 内核提示词：${client} · ${info.promptChars} 字符 · 校验 ${info.verified === true ? '通过' : info.verified === null ? '不可读' : '未通过'}`,
+  );
+  kernelPool.set(key, { kernel: k, info, lastUsed: Date.now(), dataTag });
+  currentKernel = k;
+  kernelInfo = info;
+  evictStaleKernels(key);
+  return k;
+}
+
+async function getKernel({ key, prompt }) {
+  const run = async () => {
+    const hit = kernelPool.get(key);
+    if (hit) {
+      hit.lastUsed = Date.now();
+      currentKernel = hit.kernel;
+      kernelInfo = hit.info;
+      return hit.kernel;
+    }
+    return createKernelFor(key, prompt);
+  };
+  // 建内核串行化，避免并发同时拉起多个进程；命中已有内核则直接复用，不再 close
+  const result = getKernelChain.then(run, run);
+  getKernelChain = result.catch(() => {});
+  return result;
+}
+
+const listenPort = Number(process.env.TA_PORT || 8787);
+let shim;
+try {
+  shim = await createShim({
+    getKernel,
+    kernelStatus: () => ({ origin: currentKernel?.origin ?? null, ...kernelInfo, poolSize: kernelPool.size }),
+    bridge,
+    models,
+    apiKey: process.env.TA_API_KEY || null,
+    keystore,
+    adminToken,
+    port: listenPort,
+  });
+} catch (err) {
+  // 端口被占用（例如上一个代理还没退干净）时给出可操作的提示，而不是抛出 UV_HANDLE_CLOSING 断言
+  if (err?.code === 'EADDRINUSE') {
+    console.error(`\n[teleagent] 端口 ${listenPort} 已被占用，通常是上一个代理实例还没退出。`);
+    console.error('[teleagent] 请先关闭旧实例（关闭它的命令行窗口），或设置 TA_PORT 换一个端口后重试。');
+  } else {
+    console.error('[teleagent] 启动失败：', err);
+  }
+  for (const { kernel: k } of kernelPool.values()) {
+    try { k.close(); } catch {}
+  }
+  process.exit(1);
+}
 resetSessions = () => {
   shim.resetSessions();
   resetResponsesSessions();
@@ -175,7 +233,9 @@ async function shutdown() {
   keystore.flush();
   await shim.close();
   await bridge.close().catch(() => {});
-  kernel.close();
+  for (const { kernel: k } of kernelPool.values()) {
+    try { k.close(); } catch {}
+  }
   process.exit(0);
 }
 process.on('SIGINT', shutdown);
@@ -184,6 +244,8 @@ process.on('exit', () => {
   try {
     keystore.flush();
   } catch {}
-  kernel.close();
+  for (const { kernel: k } of kernelPool.values()) {
+    try { k.close(); } catch {}
+  }
 });
 

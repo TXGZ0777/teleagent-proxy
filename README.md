@@ -183,7 +183,7 @@ CC Switch 只负责把供应商配置写进客户端配置文件，不改变协�
 | CC Switch 类型 | 客户端实际调用 | 网关现状 |
 |---|---|---|
 | `codex`（Codex CLI） | `POST /v1/responses` | ✅ 已实现，CLI 实测通过 |
-| `claude`（Claude Code） | `POST /v1/messages` | ✅ 已实现 |
+| `claude`（Claude Code） | `POST /v1/messages` | ✅ 已实现，`tool_use`/`tool_result` 走同一套工具桥（冒烟测试通过） |
 | `opencode` / `gemini` | 各自配置格式 | 未适配 |
 
 ### 一键注册供应商
@@ -223,9 +223,9 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/v1/models` | 模型清单 |
-| POST | `/v1/chat/completions` | OpenAI 协议，支持 `stream`、多轮、`reasoning_content` |
-| POST | `/v1/responses` | Responses 协议（Codex CLI），流式事件完整 |
-| POST | `/v1/messages` | Anthropic Messages 协议（Claude Code / CC Switch） |
+| POST | `/v1/chat/completions` | OpenAI 协议，支持 `stream`、多轮、`reasoning_content`、`tools` 工具中继 |
+| POST | `/v1/responses` | Responses 协议（Codex CLI），流式事件完整，工具中继已实测 |
+| POST | `/v1/messages` | Anthropic Messages 协议（Claude Code / CC Switch），`tool_use`/`tool_result` 工具中继 |
 | POST | `/v1/messages/count_tokens` | 粗略 token 估算 |
 | GET | `/healthz` | 代理与 kernel 状态（鉴权开关、启用密钥数、当前生效的提示词来源） |
 | GET | `/admin` | Web 管理台（仅回环地址，见下节） |
@@ -241,6 +241,19 @@ node tools/ccswitch-provider.mjs --app claude --apply   # Claude 那条同理
 - 非流式：聚合后一次返回，同样带 `reasoning_content` 与 `usage`
 - 错误：HTTP 4xx/5xx + `{error:{message,type,code}}`；额度不足统一成 `insufficient quota`
 - 会话：按 `user` 字段或「首条用户消息」指纹复用 kernel 会话，6 小时 TTL；kernel 侧保留历史
+- 工具：三协议的 `tools` 都会挂成 kernel 侧 MCP 工具（`ta_*`），模型调用时挂起、翻回客户端执行、
+  下一轮回填放行；无工具的轮次会把 MCP 工具一并关掉，防止模型凭空调用
+
+## 内核池
+
+kernel 是有状态会话容器，同一内核上并发跑两条对话会互相顶掉（表现为上游 `terminated`）。
+0.4.0 起按 `客户端类型 + 提示词指纹` 池化 kernel：
+
+- 命中池 → 直接复用，不再重启；未命中 → 起新实例（约 2 秒）
+- LRU 上限 `TA_KERNEL_POOL_MAX`（默认 6），只淘汰**闲置超过 10 分钟**的实例，在途与挂起工具调用的内核不淘汰
+- 非 default 实例使用独立 `runtime/data--k1/k2/...` 目录（data/config/logs 隔离），default 实例保持原 `runtime/data`
+- 提示词指纹变了会落到池里的另一个内核；同一客户端同一提示词的并发对话各占一个内核
+- 实测：Pro（27 万 token 长对话）与 Flash（五子棋）同时跑互不干扰，多会话并发零串台
 
 ## 管理台（Web 图形界面）
 
@@ -353,6 +366,7 @@ node tools/probe-prompt.mjs --builtin  # 对照：内核自带人设长什么样
 | `TA_UPSTREAM_BASE_URL` | 官方上游 | 覆盖上游地址，指向本机抓包代理 |
 | `TA_DEFAULT_MODEL` | 目录第一个 | 客户端模型名匹配不上时的兜底 |
 | `TA_ALLOW_KERNEL_TOOLS` | 关 | 设为 `1` 才放行 kernel 自带的 bash/read/write 等工具（默认全禁） |
+| `TA_KERNEL_POOL_MAX` | `6` | kernel 池上限（按提示词指纹池化，见下节） |
 | `TA_GATEWAY_KEY` | — | 上游 gateway key（见「获取上游 gateway key」） |
 | `TA_MODEL` | `chat-flash` | 仅探针用 |
 
@@ -388,9 +402,10 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 
 - **角色被折叠成文本**：kernel 的 session API 只接受 parts，system/assistant/tool 会拼进一段文本；
   多轮语义没问题，但严格的 role 结构无法保留。
-- **工具中继只做了 Responses（Codex）这一路**：`/v1/chat/completions` 与 `/v1/messages` 仍然忽略 `tools`。
-  Claude Code 要能改文件，需要把 Anthropic 的 `tool_use`/`tool_result` 接到同一套桥（工作量不大，但没做）。
-- **并行工具调用未验证**：一次返回多个 `function_call` 时按顺序下发，客户端会逐个执行。
+- **工具中继三条协议都通了**：`/v1/responses`（Codex CLI 实测）、`/v1/chat/completions`（`tools`/`tool_calls`/role:tool）、
+  `/v1/messages`（`tool_use`/`tool_result`，含流式 `input_json_delta`）共用同一套 MCP 桥；
+  chat/messages 两路已通过假内核冒烟测试（挂起→取走→放行→续跑全链路），真客户端（Claude Code 改文件）待实测。
+- **并行工具调用未验证**：一次返回多个 `function_call`/`tool_use` 时按顺序下发，客户端会逐个执行。
 - **文件水印**：kernel 的 
 eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（默认不会出现）；如自行放行 kernel 工具需注意。
 - **每轮固定开销**：kernel 会带自己的系统提示词与工具 schema（实测单轮 ~1.0–1.2 万 input tokens），
@@ -401,7 +416,7 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 
 ## 版本
 
-当前版本 **0.3.2**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.4.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 
@@ -420,11 +435,11 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 | `lib/auth.mjs` | DPAPI + v10 解密、JWT 解析 |
 | `lib/kernel.mjs` | kernel 启动（stdin payload）、env 组装、X-SA 签名 |
 | `lib/events.mjs` | `/event` SSE 消费、累积转增量、错误归一 |
-| `lib/shim.mjs` | OpenAI 兼容路由、会话映射、流式输出 |
+| `lib/shim.mjs` | OpenAI 兼容路由（含 `/v1/chat/completions` 工具中继）、会话映射、流式输出 |
 | `lib/responses.mjs` | Responses 协议适配 + 工具中继（Codex CLI） |
 | `lib/toolbridge.mjs` | 工具桥：挂载、挂起、放行、内置工具开关 |
 | `lib/mcp-server.mjs` | 最小 MCP 服务端（Streamable HTTP） |
-| `lib/anthropic.mjs` | Anthropic Messages 适配（Claude Code / CC Switch） |
+| `lib/anthropic.mjs` | Anthropic Messages 适配 + 工具中继（Claude Code / CC Switch） |
 | `lib/keystore.mjs` | API 密钥表：生成、校验、批量操作、按密钥计量 |
 | `lib/admin.mjs` | 管理台页面与 `/admin/api/*` 接口 |
 | `web/admin.html` | 管理台单页（原生 JS，无外部依赖） |
