@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.2] - 2026-11-17
+
+### Added
+
+- **长对话历史存档与按需检索**：解决 `chat-pro` 处理超大对话消息时静默卡死 240 秒的问题
+  （逐项排除确认：与 system prompt / MCP / 模型本身无关，唯一变量是对话消息体量）。
+  首轮历史超过 `TA_ARCHIVE_MIN_CHARS`（默认 12000）时，完整历史原样落盘到
+  `runtime/archive/<会话指纹>.md`，只把最近约 `TA_RECENT_CHARS`（默认 **10000**）字符
+  + 一段强制"动手前先 grep/read 存档确认进度"的指针发给模型。
+  实测 12 万字符历史 → 首轮仅 10,266 字符（约 8%），`chat-pro` 从必卡变为正常推进，
+  并观测到模型主动调用 `ta_Read`/`ta_Bash` 读存档。设计决策、妥协与影响详见
+  `docs/RELIABILITY.md` 专节。
+- `lib/archive.mjs`：存档写入（`writeArchive`）、近期摘要（`recentExcerpt`）、
+  检索指针（`archivePointer`）、安全文件名（`makeArchivePath`）原语。
+
+### Changed
+
+- `TA_RECENT_CHARS` 初版默认 6000 → **10000**（改善近期细节记忆，仍远低于卡死输入区间）。
+- 存档模式只作用于首轮；增量轮仍由内核保存历史并走 0.4.1 的裁剪机制。
+
 ## [0.4.1] - 2026-11-17
 
 ### Fixed
