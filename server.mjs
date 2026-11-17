@@ -16,6 +16,7 @@ import { createToolBridge } from './lib/toolbridge.mjs';
 import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
 import { createKeyStore } from './lib/keystore.mjs';
+import { log, warn, error } from './lib/log.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const missing = ensureTeleAgentLayout();
@@ -43,7 +44,7 @@ if (models.length === 0) {
   process.exit(1);
 }
 
-console.log(`[teleagent] 账号 ${auth.claims?.accountName ?? '?'} · kernel ${kernelVersion()}`);
+log(`账号 ${auth.claims?.accountName ?? '?'} · kernel ${kernelVersion()}`);
 
 const runtimeRoot = path.join(here, 'runtime');
 const authState = { token: auth.token, deviceId: meta.deviceId, installId: meta.installId };
@@ -72,12 +73,12 @@ async function verifyKernelPrompt(target, expected) {
   const actual = (got ?? '').trim();
   const verified = got === null ? null : want ? actual === want : true;
   if (verified === false) {
-    console.warn(
-      `[teleagent] ⚠ 内核没有采用我们下发的 prompt：期望 ${want.length} 字符，实际 ${actual.length} 字符`,
+    warn(
+      `⚠ 内核没有采用我们下发的 prompt：期望 ${want.length} 字符，实际 ${actual.length} 字符`,
     );
   }
   if (actual.includes('星辰超级智能体')) {
-    console.warn('[teleagent] ⚠ 内核正在使用自带「星辰」人设：检查 TA_BUILTIN_PROMPT 是否被设成了 1');
+    warn('⚠ 内核正在使用自带「星辰」人设：检查 TA_BUILTIN_PROMPT 是否被设成了 1');
   }
   return {
     promptChars: actual.length,
@@ -94,20 +95,22 @@ const adminToken = process.env.TA_ADMIN_TOKEN || null;
 // 内核池：按「客户端 + 提示词指纹」缓存常驻内核。并发对话提示词不同时让各内核共存，
 // 而不是 close/start 抢同一个内核 —— 后者正是「两个对话来回切内核 → terminated → 重发全量」的根源。
 const kernelPool = new Map(); // key -> { kernel, info, lastUsed, dataTag }
-const KERNEL_POOL_MAX = Number(process.env.TA_KERNEL_POOL_MAX || 6); // 池上限，防止提示词微调导致无限建内核
+// 池上限：对齐账号「并发任务上限」（默认 3 个任务位）；同时防止提示词微调导致无限建内核。
+// 闲置超过 10 分钟且池超限时才淘汰，绝不打断进行中的对话。
+const KERNEL_POOL_MAX = Number(process.env.TA_KERNEL_POOL_MAX || 3);
 let kernelSeq = 0;
 let currentKernel = null;     // 最近使用的内核，供 healthz / 关停用
 let getKernelChain = Promise.resolve();
 let resetSessions = () => {};
 
-console.log('[teleagent] 正在启动 kernel（首次约需 1–2 分钟）…');
+log('正在启动 kernel（首次约需 1–2 分钟）…');
 const defaultKernel = await startKernel({ runtimeRoot, auth: authState, catalog });
 await defaultKernel.waitReady({ timeoutMs: 90000 });
 const defaultInfo = { client: 'neutral', ...(await verifyKernelPrompt(defaultKernel, NEUTRAL_AGENT_PROMPT)) };
 kernelInfo = defaultInfo;
 currentKernel = defaultKernel;
 kernelPool.set('default', { kernel: defaultKernel, info: defaultInfo, lastUsed: Date.now() });
-console.log(`[teleagent] 内核提示词：中性兜底 · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`);
+log(`内核提示词：中性兜底 · ${kernelInfo.promptChars} 字符 · 校验 ${kernelInfo.verified === true ? '通过' : kernelInfo.verified === null ? '不可读' : '未通过'}`);
 
 const bridge = await createToolBridge({ kernel: defaultKernel });
 
@@ -131,7 +134,7 @@ function evictStaleKernels(keepKey) {
       entry.kernel.close();
     } catch {}
     evicted = true;
-    console.log(`[teleagent] 内核池淘汰 ${key}（闲置 ${Math.round((now - entry.lastUsed) / 60000)} 分钟，池内 ${kernelPool.size} 个）`);
+    log(`内核池淘汰 ${key}（闲置 ${Math.round((now - entry.lastUsed) / 60000)} 分钟，池内 ${kernelPool.size} 个）`);
   }
   if (evicted) resetSessions();
 }
@@ -140,12 +143,12 @@ async function createKernelFor(key, prompt) {
   const client = key.split(':')[0];
   const chars = (prompt ?? '').trim().length;
   const dataTag = `k${++kernelSeq}`;
-  console.log(`[teleagent] 新建内核 ${key}（${client}，${chars} 字符，dataTag=${dataTag}）；池内共 ${kernelPool.size + 1} 个`);
+  log(`新建内核 ${key}（${client}，${chars} 字符，dataTag=${dataTag}）；池内共 ${kernelPool.size + 1} 个`);
   const k = await startKernel({ runtimeRoot, dataTag, auth: authState, catalog, agentPrompt: prompt });
   await k.waitReady({ timeoutMs: 90000 });
   const info = { client, ...(await verifyKernelPrompt(k, prompt)) };
-  console.log(
-    `[teleagent] 内核提示词：${client} · ${info.promptChars} 字符 · 校验 ${info.verified === true ? '通过' : info.verified === null ? '不可读' : '未通过'}`,
+  log(
+    `内核提示词：${client} · ${info.promptChars} 字符 · 校验 ${info.verified === true ? '通过' : info.verified === null ? '不可读' : '未通过'}`,
   );
   kernelPool.set(key, { kernel: k, info, lastUsed: Date.now(), dataTag });
   currentKernel = k;
@@ -158,10 +161,24 @@ async function getKernel({ key, prompt }) {
   const run = async () => {
     const hit = kernelPool.get(key);
     if (hit) {
-      hit.lastUsed = Date.now();
-      currentKernel = hit.kernel;
-      kernelInfo = hit.info;
-      return hit.kernel;
+      const alive = typeof hit.kernel.isAlive === 'function' ? hit.kernel.isAlive() : true;
+      const healthy = !hit.kernel.health || hit.kernel.health.ok !== false;
+      if (alive && healthy) {
+        hit.lastUsed = Date.now();
+        currentKernel = hit.kernel;
+        kernelInfo = hit.info;
+        return hit.kernel;
+      }
+      // 内核进程已退出、或被连续网络失败判定为不可用：它上面的会话全部失效。
+      // 必须剔除并重建，否则会一直复用死内核 —— 客户端看到的就是连环 "fetch failed"。
+      kernelPool.delete(key);
+      try {
+        hit.kernel.close();
+      } catch {}
+      const why = alive ? '连续网络失败' : '进程已退出';
+      warn(`内核 ${key} ${why}（${hit.kernel.health?.lastFailure ?? '未知'}），剔除后重建`);
+      // 该内核的 sessionID 已全部失效；清空映射让客户端下一轮从自己的消息全量重放
+      resetSessions();
     }
     return createKernelFor(key, prompt);
   };
@@ -187,10 +204,11 @@ try {
 } catch (err) {
   // 端口被占用（例如上一个代理还没退干净）时给出可操作的提示，而不是抛出 UV_HANDLE_CLOSING 断言
   if (err?.code === 'EADDRINUSE') {
-    console.error(`\n[teleagent] 端口 ${listenPort} 已被占用，通常是上一个代理实例还没退出。`);
-    console.error('[teleagent] 请先关闭旧实例（关闭它的命令行窗口），或设置 TA_PORT 换一个端口后重试。');
+    console.log();
+    error(`端口 ${listenPort} 已被占用，通常是上一个代理实例还没退出。`);
+    error('请先关闭旧实例（关闭它的命令行窗口），或设置 TA_PORT 换一个端口后重试。');
   } else {
-    console.error('[teleagent] 启动失败：', err);
+    error('启动失败：', err);
   }
   for (const { kernel: k } of kernelPool.values()) {
     try { k.close(); } catch {}
@@ -202,12 +220,12 @@ resetSessions = () => {
   resetResponsesSessions();
 };
 
-console.log(`[teleagent] OpenAI 兼容端点: ${shim.url}`);
-console.log(`[teleagent] 模型: ${models.map((m) => m.id).join(', ')}`);
-if (process.env.TA_API_KEY) console.log('[teleagent] 已启用 Bearer 校验（环境变量 TA_API_KEY）');
+log(`OpenAI 兼容端点: ${shim.url}`);
+log(`模型: ${models.map((m) => m.id).join(', ')}`);
+if (process.env.TA_API_KEY) log('已启用 Bearer 校验（环境变量 TA_API_KEY）');
 const keyStats = keystore.stats();
-console.log(`[teleagent] API 密钥: ${keyStats.activeKeys} 启用 / ${keyStats.totalKeys} 总数 · ${keystore.file}`);
-console.log(`[teleagent] 管理台: http://127.0.0.1:${shim.port}/admin${adminToken ? '（需要 TA_ADMIN_TOKEN）' : ''}`);
+log(`API 密钥: ${keyStats.activeKeys} 启用 / ${keyStats.totalKeys} 总数 · ${keystore.file}`);
+log(`管理台: http://127.0.0.1:${shim.port}/admin${adminToken ? '（需要 TA_ADMIN_TOKEN）' : ''}`);
 // start.cmd 会带上 TA_OPEN_ADMIN=1：服务就绪后自动打开管理台
 if (process.env.TA_OPEN_ADMIN === '1') {
   const adminUrl = `http://127.0.0.1:${shim.port}/admin`;
@@ -222,14 +240,15 @@ if (process.env.TA_OPEN_ADMIN === '1') {
 }
 
 if (!keystore.required(process.env.TA_API_KEY || null)) {
-  console.log('[teleagent] 提示: 当前未开启鉴权，本机任意程序都可调用。可在管理台新建密钥或把鉴权设为「强制校验」。');
+  log('提示: 当前未开启鉴权，本机任意程序都可调用。可在管理台新建密钥或把鉴权设为「强制校验」。');
 }
 
 let closing = false;
 async function shutdown() {
   if (closing) return;
   closing = true;
-  console.log('\n[teleagent] 正在关闭…');
+  console.log();
+  log('正在关闭…');
   keystore.flush();
   await shim.close();
   await bridge.close().catch(() => {});
