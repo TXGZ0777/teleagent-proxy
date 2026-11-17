@@ -267,7 +267,6 @@
   .proto-note .warntext { color: var(--danger); font-weight: 600; }
 
   /* 最近积分消耗：与"最近调用"一致的紧凑行 */
-  .pts-usage-wrap { max-height: 268px; overflow-y: auto; }
   .cost-row {
     display: grid; grid-template-columns: 62px 1fr auto; gap: 8px; align-items: center;
     padding: 7px 2px; border-bottom: 1px dashed #eceff3; font-size: 12.5px;
@@ -282,7 +281,7 @@
   .pts-legend { color: var(--muted); font-size: 11px; margin-top: 8px; }
   .pts-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 
-  .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
+  .log { display: grid; gap: 0; }
   .log-row {
     display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center;
     padding: 7px 2px; border-bottom: 1px dashed #eceff3; font-size: 12.5px;
@@ -292,6 +291,7 @@
   .log-row .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .log-row .badge { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: #eef1f5; color: var(--muted); font-family: var(--mono); }
   .log-row .badge.err { background: var(--danger-soft); color: var(--danger); }
+  .log-row .cnt { color: var(--accent); font-weight: 600; font-size: 11.5px; }
 
   /* ---------- modal ---------- */
   .backdrop {
@@ -947,15 +947,16 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     var perPage = 10, pages = Math.max(1, Math.ceil(folded.length / perPage));
     if (logPage > pages) logPage = pages;
     var slice = folded.slice((logPage - 1) * perPage, logPage * perPage);
-    $('log').innerHTML = slice.map(function (g) {
+    var summary = '<div class="cost-summary">本机共记录 <b>' + logs.length + '</b> 次调用 · 折叠为 ' + folded.length + ' 组</div>';
+    $('log').innerHTML = summary + slice.map(function (g) {
       var l = g.rep;
-      var badge = g.count > 1 ? ('×' + g.count) : (l.status || 0);
       return '<div class="log-row">' +
         '<span class="t" title="' + fmtClock(g.latestTs) + '">' + fmtClock(l.ts) + '</span>' +
         '<span class="m" title="' + esc(l.keyName + ' · ' + l.model + ' · ' + l.protocol) + '">' +
           esc(l.keyName) + ' <span class="muted">· ' + esc(l.protocol || '—') + '</span>' +
-          (g.count > 1 ? ' <span class="muted">(' + esc(l.model || '—') + ')</span>' : '') + '</span>' +
-        '<span class="badge' + (g.ok ? '' : ' err') + '" title="' + (g.count > 1 ? (g.count + ' 次成功请求') : ('状态 ' + l.status)) + '">' + badge + '</span>' +
+          (g.count > 1 ? ' <span class="muted">(' + esc(l.model || '—') + ')</span>' : '') +
+          (g.count > 1 ? ' <span class="cnt">共' + g.count + '次</span>' : '') + '</span>' +
+        '<span class="badge' + (g.ok ? '' : ' err') + '" title="状态 ' + l.status + '">' + (l.status || 0) + '</span>' +
         '</div>';
     }).join('');
     $('logPager').innerHTML = '<div class="pts-pager"><button class="btn sm" id="logPrev"' + (logPage<=1?' disabled':'') + '>‹ 上一页</button>' +
