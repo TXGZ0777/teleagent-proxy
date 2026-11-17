@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.4] - 2026-11-17
+
+### Added
+
+- **管理台「稳定性设置」区**：6 个抗卡死参数（静默自动续接开关、会话回收阈值、续接/常规看门狗、
+  存档触发字符、近期消息字符）可可视化修改，**即时生效、无需重启，并写入
+  `runtime/config/runtime.json` 持久保留**。新增 `POST /admin/api/runtime`（保存/恢复默认），
+  `/admin/api/state` 增加 `runtime` 字段。新增 `lib/runtime-config.mjs`，优先级
+  配置文件 > 环境变量 > 代码默认；更新时同步回 `process.env`，覆盖全部三协议链路。
+  `TA_RUNTIME_CONFIG_FILE` 可改配置文件路径。详见 `docs/ADMIN.md`、`docs/CONFIG.md`。
+
+### Fixed
+
+- 运行时配置 `reset` 后仍把当前值写进配置文件、导致"恢复默认"重启后失效的问题；
+  现在只持久化被覆盖的项。（测试发现并修复）
+
 ## [0.4.3] - 2026-11-17
 
 ### Added

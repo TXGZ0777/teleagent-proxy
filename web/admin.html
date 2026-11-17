@@ -186,6 +186,31 @@
   .field .k { width: 74px; color: var(--muted); flex: none; }
   .field .v { font-family: var(--mono); font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* ---------- 运行时配置 ---------- */
+  .rc-list { display: grid; gap: 2px; }
+  .rc-row {
+    display: grid; grid-template-columns: 1fr 150px 26px; gap: 12px; align-items: center;
+    padding: 9px 2px; border-bottom: 1px dashed #eceff3;
+  }
+  .rc-row:last-child { border-bottom: none; }
+  .rc-row .rc-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .rc-row .rc-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+  .rc-row .rc-ctl { display: flex; justify-content: flex-end; }
+  .rc-row input[type=number] {
+    width: 130px; height: 32px; padding: 0 9px; border: 1px solid var(--line-strong);
+    border-radius: 8px; font-family: var(--mono); font-size: 12.5px; text-align: right;
+  }
+  .rc-row .rc-env { font: 10.5px var(--mono); color: #9aa3ad; }
+  .rc-tag { font-size: 10px; padding: 1px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; }
+  .sw { position: relative; width: 42px; height: 24px; flex: none; }
+  .sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 2; }
+  .sw .track { position: absolute; inset: 0; background: #cfd6df; border-radius: 999px; transition: background .15s; }
+  .sw .track:after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s; }
+  .sw input:checked + .track { background: var(--accent); }
+  .sw input:checked + .track:after { transform: translateX(18px); }
+  .rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .rc-foot .hint2 { font-size: 11.5px; color: var(--muted); }
+
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
     display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center;
@@ -359,6 +384,18 @@
           <tbody id="tbody"></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="card panel" id="rcPanel">
+      <div class="panel-head">
+        <h2>稳定性设置</h2>
+        <span class="hint">改完即时生效并重启保留；控制长对话存档、会话回收与静默自动续接</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="rcReset">恢复默认</button>
+        <button class="btn primary sm" id="rcSave">保存</button>
+      </div>
+      <div class="rc-list" id="rcList"><div class="hint">加载中…</div></div>
+      <div class="rc-foot"><span class="hint2" id="rcStatus"></span></div>
     </section>
 
     <div class="grid2">
@@ -623,6 +660,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     renderTable();
     renderLog();
     renderAuthMode();
+    renderRuntime();
   }
 
   function agentLabel(a) {
@@ -994,6 +1032,63 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     localStorage.setItem('ta_admin_token', token);
     closeModal('mToken');
     load();
+  });
+
+  /* ---------- 运行时配置 ---------- */
+  var rcType = {}; // 缓存每项类型，供保存时组装 patch
+  function renderRuntime() {
+    var rt = state && state.runtime;
+    if (!rt) { $('rcPanel').style.display = 'none'; return; }
+    $('rcPanel').style.display = '';
+    var list = $('rcList');
+    // 正在编辑时不重建，避免打断输入
+    if (list.dataset.built === '1' && list.contains(document.activeElement)) return;
+    var html = '';
+    Object.keys(rt).forEach(function (name) {
+      var it = rt[name];
+      var isBool = (typeof it.value === 'boolean');
+      rcType[name] = isBool ? 'bool' : 'num';
+      var ctl;
+      if (isBool) {
+        ctl = '<label class="sw"><input type="checkbox" data-rc="' + name + '"' + (it.value ? ' checked' : '') + '><span class="track"></span></label>';
+      } else {
+        ctl = '<input type="number" data-rc="' + name + '" value="' + it.value + '" />';
+      }
+      html += '<div class="rc-row">' +
+        '<div><div class="rc-name">' + esc(it.label) + (it.overridden ? '<span class="rc-tag">已自定义</span>' : '') + '</div>' +
+        '<div class="rc-desc">' + esc(it.desc) + ' <span class="rc-env">' + esc(it.env) + '</span> · 默认 ' + esc(String(it.default)) + '</div></div>' +
+        '<div class="rc-ctl">' + ctl + '</div><div></div></div>';
+    });
+    list.innerHTML = html;
+    list.dataset.built = '1';
+  }
+
+  function rcPatch() {
+    var patch = {};
+    document.querySelectorAll('#rcList [data-rc]').forEach(function (el) {
+      var name = el.getAttribute('data-rc');
+      patch[name] = rcType[name] === 'bool' ? el.checked : el.value;
+    });
+    return patch;
+  }
+
+  $('rcSave').addEventListener('click', function () {
+    $('rcStatus').textContent = '保存中…';
+    api('/admin/api/runtime', { method: 'POST', body: rcPatch() }).then(function () {
+      $('rcStatus').textContent = '已保存，即时生效（重启后保留）';
+      toast('稳定性设置已保存');
+      return load();
+    }).catch(function (err) { $('rcStatus').textContent = '保存失败：' + err.message; });
+  });
+
+  $('rcReset').addEventListener('click', function () {
+    var names = Object.keys(rcType);
+    if (!names.length) return;
+    api('/admin/api/runtime', { method: 'POST', body: { reset: true, names: names } }).then(function () {
+      $('rcStatus').textContent = '已恢复默认（重启后仍为默认）';
+      toast('已恢复默认');
+      return load();
+    }).catch(function (err) { $('rcStatus').textContent = '恢复失败：' + err.message; });
   });
 
   /* ---------- 头部按钮 ---------- */

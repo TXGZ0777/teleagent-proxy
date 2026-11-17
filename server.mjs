@@ -16,6 +16,7 @@ import { createToolBridge } from './lib/toolbridge.mjs';
 import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
 import { createKeyStore } from './lib/keystore.mjs';
+import { createRuntimeConfig } from './lib/runtime-config.mjs';
 import { log, warn, error } from './lib/log.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -90,6 +91,8 @@ async function verifyKernelPrompt(target, expected) {
 
 // API Key 表：默认 runtime/config/api-keys.json（TA_KEYS_FILE 可改），管理台在这里增删
 const keystore = createKeyStore({ file: process.env.TA_KEYS_FILE || path.join(runtimeRoot, 'config', 'api-keys.json') });
+// 运行时配置：管理台可即时改、写 JSON 持久化，重启保留。构造时即把值同步回 process.env。
+const runtimeConfig = createRuntimeConfig({ file: process.env.TA_RUNTIME_CONFIG_FILE || path.join(runtimeRoot, 'config', 'runtime.json') });
 const adminToken = process.env.TA_ADMIN_TOKEN || null;
 
 // 内核池：按「客户端 + 提示词指纹」缓存常驻内核。并发对话提示词不同时让各内核共存，
@@ -199,6 +202,7 @@ try {
     apiKey: process.env.TA_API_KEY || null,
     keystore,
     adminToken,
+    runtimeConfig,
     port: listenPort,
     archiveDir: path.join(runtimeRoot, 'archive'),
   });
