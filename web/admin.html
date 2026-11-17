@@ -1187,7 +1187,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     });
   }
   function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
-  function fmtTime(s){ return s ? String(s).replace('T',' ').slice(0,19) : '—'; }
+  function fmtStatTime(s){ return s ? String(s).replace('T',' ').slice(0,19) : '—'; }
   var usagePage = 1;
   function loadUsage(page){
     usagePage = page || usagePage || 1;
@@ -1196,7 +1196,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
       if(!d || d.enabled===false || d.ok===false){ box.innerHTML='<span class="hint">用量记录不可用'+(d&&d.error?'：'+escHtml(d.error):'')+'</span>'; return; }
       var rows=(d.list||[]).map(function(x){
         var disc = x.totalUsageOriginal>0 ? Math.round((1-x.totalUsage/x.totalUsageOriginal)*100) : 0;
-        return '<tr><td>'+escHtml(fmtTime(x.statTime))+'</td><td>'+escHtml(x.model)+'</td>'+
+        return '<tr><td>'+escHtml(fmtStatTime(x.statTime))+'</td><td>'+escHtml(x.model)+'</td>'+
           '<td class="num">'+escHtml(x.totalUsage)+'</td><td class="num">'+escHtml(x.totalUsageOriginal)+'</td>'+
           '<td class="num">'+(disc>0?'-'+disc+'%':'—')+'</td></tr>';
       }).join('');
