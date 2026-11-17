@@ -148,7 +148,7 @@ codex exec --skip-git-repo-check "只回答两个字：收到"
 ```
 
 **CLI / 桌面端 / IDE 插件共用一套配置**：`~/.codex/config.toml`（Windows 是
-`%USERPROFILE%\.codex\config.toml`）由 Codex CLI、ChatGPT 桌面端（Codex 模式）和
+`%USERPROFILE%\.codex\config.toml`）由 Codex CLI、ChatGPT 桌面端和
 VS Code 等编辑器插件共同读取，上面的配置写一份、三端生效（官方文档口径）。注意：
 
 - `model_provider` / `model_providers` 只在**用户级**配置生效，项目级
