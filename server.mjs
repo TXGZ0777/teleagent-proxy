@@ -200,6 +200,7 @@ try {
     keystore,
     adminToken,
     port: listenPort,
+    archiveDir: path.join(runtimeRoot, 'archive'),
   });
 } catch (err) {
   // 端口被占用（例如上一个代理还没退干净）时给出可操作的提示，而不是抛出 UV_HANDLE_CLOSING 断言
