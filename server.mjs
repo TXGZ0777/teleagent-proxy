@@ -251,10 +251,10 @@ const keyStats = keystore.stats();
 log(`API 密钥: ${keyStats.activeKeys} 启用 / ${keyStats.totalKeys} 总数 · ${keystore.file}`);
 log(`管理台: http://127.0.0.1:${shim.port}/admin${adminToken ? '（需要 TA_ADMIN_TOKEN）' : ''}`);
 // 自动签到：档位来自运行时配置（管理台可改、即时生效、重启保留）
-// 2=启动检查一次(默认) / 0=关闭 / 1=启动检查+每小时
+// 2=启动检查一次(默认) / 0=关闭 / 1=启动检查+每天00:00:30定时
 const signMode = Number(runtimeConfig.get('autoSign'));
 startAutoSign({ log, getMode: () => Number(runtimeConfig.get('autoSign')) });
-log(`积分自动签到: ${{ 0: '已关闭', 1: '启动检查 + 每小时检查', 2: '启动检查' }[signMode] ?? '启动检查'}（管理台可改，即时生效）`);
+log(`积分自动签到: ${{ 0: '已关闭', 1: '启动检查 + 每天00:00:30定时', 2: '启动检查' }[signMode] ?? '启动检查'}（管理台可改，即时生效）`);
 // start.cmd 会带上 TA_OPEN_ADMIN=1：服务就绪后自动打开管理台
 if (process.env.TA_OPEN_ADMIN === '1') {
   const adminUrl = `http://127.0.0.1:${shim.port}/admin`;

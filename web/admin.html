@@ -1147,7 +1147,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
       '<div class="pts-sign">'+signTag+'<span class="hint">每天可领 '+escHtml(s.dailyClaimable)+' 积分</span></div>'+
       '<div class="pts-autosign"><label for="ptsAutoSign">自动签到</label>'+
         '<select id="ptsAutoSign">'+
-          [['2','启动检查一次（默认）'],['1','启动检查 + 每小时'],['0','关闭']].map(function(o){
+          [['2','启动检查一次（默认）'],['1','启动检查 + 每天0点定时'],['0','关闭']].map(function(o){
             return '<option value="'+o[0]+'"'+(String(d.autoSign===undefined?2:d.autoSign)===o[0]?' selected':'')+'>'+o[1]+'</option>';
           }).join('')+
         '</select><span class="pt" id="ptsAutoStatus"></span>'+
