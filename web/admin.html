@@ -232,6 +232,15 @@
   .pts-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; background: #eef1f5; color: var(--muted); }
   .pts-tag.yes { background: var(--ok-soft, #e7f7ee); color: var(--ok, #1a7f4b); }
   .pts-tag.no { background: #fff2dc; color: #a86400; }
+  .pts-expiry { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+  .pts-expiry.soon { color: #c0392b; font-weight: 600; }
+  .pts-details { margin-top: 12px; }
+  .pts-details summary { cursor: pointer; font-size: 12.5px; color: var(--accent, #3C67FF); user-select: none; }
+  .pts-items { margin-top: 8px; border-top: 1px solid var(--line, #e8ecf2); }
+  .pts-item { display: flex; justify-content: space-between; gap: 12px; padding: 7px 2px; border-bottom: 1px solid var(--line, #eef1f5); font-size: 12px; }
+  .pts-item .nm { color: var(--text, #222); }
+  .pts-item .meta { color: var(--muted); font-family: var(--mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
+  .pts-item.soon .meta { color: #c0392b; font-weight: 600; }
 
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
@@ -1094,13 +1103,30 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     var signTag = s.claimedToday
       ? '<span class="pts-tag yes">✓ 今日已领取</span>'
       : '<span class="pts-tag no">今日未领取 · 可领 '+escHtml(s.dailyClaimable)+' 积分</span>';
+    var exp = d.expiry || {};
+    var expLine = exp.end
+      ? '<div class="pts-expiry'+(exp.daysLeft!=null && exp.daysLeft<=7?' soon':'')+'">有效期至 '+escHtml(exp.end)+
+        '（剩 '+escHtml(exp.daysLeft==null?'—':exp.daysLeft+' 天')+'）· 每笔积分自领取起约 30 天有效</div>'
+      : '';
+    var items = d.items || [];
+    var soonCnt = items.filter(function(x){ return x.daysLeft!=null && x.daysLeft<=7; }).length;
+    var itemsHtml = items.length
+      ? '<details class="pts-details"><summary>积分明细（'+items.length+' 笔'+(soonCnt?' · '+soonCnt+' 笔即将到期':'')+'）</summary><div class="pts-items">'+
+        items.map(function(x){
+          var dl = x.daysLeft;
+          var soon = dl!=null && dl<=7;
+          return '<div class="pts-item'+(soon?' soon':'')+'"><span class="nm">'+escHtml(x.name)+'</span>'+
+            '<span class="meta">'+escHtml(x.balance)+' 分 · 至 '+escHtml(String(x.effectiveEnd||'').slice(0,10))+(dl!=null?'（'+dl+'天）':'')+'</span></div>';
+        }).join('')+'</div></details>'
+      : '';
     box.innerHTML =
       '<div class="pts-grid">'+
         '<div class="pts-cell"><div class="k">当前积分余额</div><div class="v">'+bal+'</div></div>'+
         '<div class="pts-cell"><div class="k">累计签到</div><div class="v">'+escHtml(s.totalDays)+' <small>天</small></div></div>'+
         '<div class="pts-cell"><div class="k">累计领取</div><div class="v">'+escHtml(s.totalClaimed)+' <small>积分</small></div></div>'+
-      '</div>'+
-      '<div class="pts-sign">'+signTag+'<span class="hint">每天可领 '+escHtml(s.dailyClaimable)+' 积分 · 有效期见官方活动页</span></div>';
+      '</div>'+ expLine +
+      '<div class="pts-sign">'+signTag+'<span class="hint">每天可领 '+escHtml(s.dailyClaimable)+' 积分</span></div>'+
+      itemsHtml;
     $('ptsSign').disabled = !!s.claimedToday;
     $('ptsSign').textContent = s.claimedToday ? '今日已领取' : '领取今日积分';
   }

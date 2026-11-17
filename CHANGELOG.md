@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0] - 2026-11-18
+
+### Added
+
+- **积分有效期**：管理台积分卡片显示汇总到期日与剩余天数；新增可折叠的「积分明细」
+  （每笔积分的名称/余额/到期日，按到期日升序，7 天内过期标红）。数据来自官方
+  `points/detail` 的 `effectiveStart/effectiveEnd`（每笔自领取起约 30 天有效）。
+  `GET /admin/api/points` 增加 `expiry` 与 `items[]` 字段。
+
 ## [0.4.9] - 2026-11-18
 
 ### Changed
