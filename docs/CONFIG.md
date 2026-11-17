@@ -42,7 +42,7 @@
 | `TA_STREAM_IDLE_MS` | `240000` | 流空闲看门狗：内容无增长超过该时长报 `UPSTREAM_IDLE`。`0`=关闭 |
 | `TA_TURN_TIMEOUT_MS` | `1200000` | 单轮总时长上限（20 分钟） |
 | `TA_GATEWAY_KEY` | — | 上游 gateway key（见下节；也可写 `local.secrets.json`） |
-| `TA_AUTO_SIGN` | 关 | 设为 `1` 开启代理侧**自动签到领积分**（每小时检查一次，每日最多领一次）。官方 app 已内置每天 08:13 自动领取，这个开关是给不用官方 UI 的场景；默认关闭。详见 [ADMIN.md](ADMIN.md) |
+| `TA_AUTO_SIGN` | 启动检查 | 积分签到行为：`默认/空`=每次启动检查一次、今天没领就顺手领掉；`0`=完全关闭；`1`=启动检查 + 每小时再检查一次（适合长期不重启）。每日最多领一次、幂等。详见 [ADMIN.md](ADMIN.md) |
 | `TA_POINTS_BASE_URL` | 官方 | 积分接口 base URL 覆盖（一般不用改） |
 | `TA_POINTS_CHANNEL_ID` / `TA_POINTS_RUNTIME_ENV` | 空 | 积分接口的可选鉴权头（默认空即可用） |
 | `TA_OPEN_ADMIN` | 关 | `start.cmd` 附带 `=1`：服务就绪后自动打开管理台 |
