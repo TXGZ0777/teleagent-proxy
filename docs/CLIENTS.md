@@ -120,6 +120,11 @@ curl.exe -N -X POST http://127.0.0.1:8787/v1/chat/completions `
 
 ## 接 Codex CLI
 
+> 命名说明（2026-07 起）：OpenAI 已把独立的 Codex 桌面端并入统一的 **ChatGPT 桌面应用**
+> （Chat / Work / Codex 三种模式，Codex 成为其中一个模式）。**CLI 本身没有改名**：
+> 命令仍是 `codex`，配置仍是 `~/.codex/config.toml`，本节的配置与实测照旧适用；
+> 其余 Codex 字样（`wire_api`、cc-switch 的 `--app codex` 等）均为技术标识，未随改名变化。
+
 Codex 0.12x 起**只支持 Responses 协议**（`wire_api = "chat"` 会在启动时直接报错），
 网关的 `/v1/responses` 就是为它准备的。
 
