@@ -222,6 +222,17 @@
   .runlog .lv-ERROR { color: #ff8a80; }
   .runlog .lv-INFO { color: #c9d3e0; }
 
+  /* ---------- 积分福利社 ---------- */
+  .pts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 4px 0 14px; }
+  .pts-cell { background: var(--soft, #f6f8fb); border-radius: 10px; padding: 12px 14px; }
+  .pts-cell .k { font-size: 11.5px; color: var(--muted); }
+  .pts-cell .v { font-size: 22px; font-weight: 700; margin-top: 2px; font-family: var(--mono); }
+  .pts-cell .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .pts-sign { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pts-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; background: #eef1f5; color: var(--muted); }
+  .pts-tag.yes { background: var(--ok-soft, #e7f7ee); color: var(--ok, #1a7f4b); }
+  .pts-tag.no { background: #fff2dc; color: #a86400; }
+
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
     display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center;
@@ -407,6 +418,17 @@
       </div>
       <div class="rc-list" id="rcList"><div class="hint">加载中…</div></div>
       <div class="rc-foot"><span class="hint2" id="rcStatus"></span></div>
+    </section>
+
+    <section class="card panel" id="ptsPanel">
+      <div class="panel-head">
+        <h2>积分福利社</h2>
+        <span class="hint">TeleAgent 官方账号的积分余额与每日签到（只读查询 + 手动领取，与官方客户端同一账号）</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="ptsRefresh">刷新</button>
+        <button class="btn primary sm" id="ptsSign">领取今日积分</button>
+      </div>
+      <div id="ptsBody"><span class="hint">加载中…</span></div>
     </section>
 
     <section class="card panel">
@@ -1062,6 +1084,38 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     load();
   });
 
+  /* ---------- 积分福利社 ---------- */
+  function escHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function renderPoints(d){
+    var box=$('ptsBody');
+    if(!d || d.enabled===false){ box.innerHTML='<span class="hint">积分功能不可用（未配置登录态）</span>'; $('ptsSign').disabled=true; return; }
+    if(d.ok===false){ box.innerHTML='<span class="hint" style="color:var(--danger)">查询失败：'+escHtml(d.error)+'</span>'; $('ptsSign').disabled=true; return; }
+    var s=d.sign||{}, bal=(typeof d.balance==='number')?d.balance.toFixed(2):'—';
+    var signTag = s.claimedToday
+      ? '<span class="pts-tag yes">✓ 今日已领取</span>'
+      : '<span class="pts-tag no">今日未领取 · 可领 '+escHtml(s.dailyClaimable)+' 积分</span>';
+    box.innerHTML =
+      '<div class="pts-grid">'+
+        '<div class="pts-cell"><div class="k">当前积分余额</div><div class="v">'+bal+'</div></div>'+
+        '<div class="pts-cell"><div class="k">累计签到</div><div class="v">'+escHtml(s.totalDays)+' <small>天</small></div></div>'+
+        '<div class="pts-cell"><div class="k">累计领取</div><div class="v">'+escHtml(s.totalClaimed)+' <small>积分</small></div></div>'+
+      '</div>'+
+      '<div class="pts-sign">'+signTag+'<span class="hint">每天可领 '+escHtml(s.dailyClaimable)+' 积分 · 有效期见官方活动页</span></div>';
+    $('ptsSign').disabled = !!s.claimedToday;
+    $('ptsSign').textContent = s.claimedToday ? '今日已领取' : '领取今日积分';
+  }
+  function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
+  $('ptsRefresh').addEventListener('click', loadPoints);
+  $('ptsSign').addEventListener('click', function(){
+    if(!confirm('确认领取今天的积分？这会向 TeleAgent 官方发起签到领取。')) return;
+    var btn=$('ptsSign'); btn.disabled=true; btn.textContent='领取中…';
+    api('/admin/api/points/sign',{method:'POST'}).then(function(d){
+      if(d.ok===false){ alert('领取失败：'+(d.error||'未知错误')); }
+      else { alert(d.alreadyClaimed ? '今天已经领取过了。' : ('领取成功！+'+escHtml(d.gained||d.points||'100')+' 积分')); }
+      loadPoints();
+    }).catch(function(e){ alert('领取失败：'+e.message); loadPoints(); });
+  });
+
   /* ---------- 运行日志 ---------- */
   var logStick = true; // 是否粘着底部（用户往上滚则暂停跟随）
   function loadLogs() {
@@ -1169,6 +1223,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   /* ---------- 轮询 ---------- */
   load();
   loadLogs();
+  loadPoints();
   timer = setInterval(function () {
     if (document.hidden) return;
     if (document.querySelector('.backdrop.show')) return;

@@ -17,6 +17,7 @@ import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
 import { createKeyStore } from './lib/keystore.mjs';
 import { createRuntimeConfig } from './lib/runtime-config.mjs';
+import { createPoints, startAutoSign } from './lib/points.mjs';
 import { log, warn, error, setLogFile } from './lib/log.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -220,6 +221,7 @@ try {
     keystore,
     adminToken,
     runtimeConfig,
+    points: createPoints(),
     port: listenPort,
     archiveDir: path.join(runtimeRoot, 'archive'),
   });
@@ -248,6 +250,11 @@ if (process.env.TA_API_KEY) log('已启用 Bearer 校验（环境变量 TA_API_K
 const keyStats = keystore.stats();
 log(`API 密钥: ${keyStats.activeKeys} 启用 / ${keyStats.totalKeys} 总数 · ${keystore.file}`);
 log(`管理台: http://127.0.0.1:${shim.port}/admin${adminToken ? '（需要 TA_ADMIN_TOKEN）' : ''}`);
+// 可选自动签到（默认关闭；官方 app 也内置了每日 08:13 自动领取）
+if (process.env.TA_AUTO_SIGN === '1') {
+  startAutoSign({ log });
+  log('积分自动签到: 已开启（每小时检查，每日最多领一次）');
+}
 // start.cmd 会带上 TA_OPEN_ADMIN=1：服务就绪后自动打开管理台
 if (process.env.TA_OPEN_ADMIN === '1') {
   const adminUrl = `http://127.0.0.1:${shim.port}/admin`;

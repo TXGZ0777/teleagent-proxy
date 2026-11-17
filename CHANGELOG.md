@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.8] - 2026-11-18
+
+### Added
+
+- **管理台「积分福利社」**：显示当前 TeleAgent 账号的积分余额、签到状态（累计天数/累计积分/
+  今日是否可领），并提供「领取今日积分」按钮（确认后签到领 100 分，每天一次、幂等）。
+  新增 `GET /admin/api/points`（只读查询）与 `POST /admin/api/points/sign`（领取）。
+- `lib/points.mjs`：用本地已解密的登录态调用官方 `/user/portal/points/detail`、
+  `companyStore/checkDayTask`、`v3/checkDayTask` 接口；静态分析官方 app.asar 确认这些是明文头
+  鉴权（无需复刻内核签名），已实测取到真实余额与签到状态。登录态按 JWT exp 缓存。
+- 可选 **代理侧自动签到** `TA_AUTO_SIGN=1`（默认关，官方 app 已内置每天 08:13 自动领取）：
+  每小时检查、`claimedToday=false` 才领。附 `TA_POINTS_BASE_URL/CHANNEL_ID/RUNTIME_ENV` 覆盖项。
+
 ## [0.4.7] - 2026-11-18
 
 ### Added
