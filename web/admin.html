@@ -261,6 +261,10 @@
   .panel-note { margin: 0 0 14px; padding: 11px 13px; background: var(--accent-soft);
     border: 1px solid #d3ddfb; border-radius: 9px; font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
   .panel-note code { font-family: var(--mono); background: #fff; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+  .proto-note { display: grid; gap: 7px; margin: 0 0 14px; padding: 11px 13px; background: var(--warn-soft);
+    border: 1px solid #f1e0c2; border-radius: 9px; font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
+  .proto-note code { font-family: var(--mono); background: #fff; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+  .proto-note .warntext { color: var(--danger); font-weight: 600; }
 
   /* 最近积分消耗：与"最近调用"一致的紧凑行 */
   .pts-usage-wrap { max-height: 268px; overflow-y: auto; }
@@ -395,6 +399,70 @@
       <div class="chart" id="chart"></div>
     </section>
 
+    <div class="grid2">
+      <section class="card panel">
+        <div class="panel-head">
+          <h2>最近积分消耗</h2>
+          <span class="hint">官方按次记录</span>
+          <div class="spacer"></div>
+          <button class="btn sm" id="usageRefresh">刷新</button>
+        </div>
+        <div id="ptsUsage"><span class="hint">加载中…</span></div>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head">
+          <h2>最近调用</h2>
+          <span class="hint">相邻同密钥请求自动折叠</span>
+          <div class="spacer"></div>
+          <button class="btn sm" id="logRefresh">刷新</button>
+        </div>
+        <div class="log" id="log"></div>
+        <div id="logPager"></div>
+      </section>
+    </div>
+
+    <section class="card panel" id="ptsPanel">
+      <div class="panel-head">
+        <h2>积分福利社</h2>
+        <span class="hint">TeleAgent 官方账号的积分余额与每日签到（只读查询 + 手动领取，与官方客户端同一账号）</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="ptsRefresh">刷新</button>
+        <button class="btn primary sm" id="ptsSign">领取今日积分</button>
+      </div>
+      <div id="ptsBody"><span class="hint">加载中…</span></div>
+    </section>
+
+    <section class="card panel" id="accessPanel">
+      <div class="panel-head">
+        <h2>接入信息</h2>
+        <span class="hint">按下方协议填 Base URL，密钥用紧接着的「API 密钥」生成</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="copyCurl">复制示例</button>
+      </div>
+      <p class="panel-note">这个网关把 TeleAgent 的免费额度包装成标准协议接口，供 WorkBuddy 等客户端直接调用。
+        鉴权用紧接着「API 密钥」里生成的 <code>ta-sk-</code> 密钥；所有请求只在本机转发，密钥和用量留在本机。</p>
+      <div class="proto-note">
+        <div><b>OpenAI / Responses</b>（Chat Completions、Codex）：Base URL <code>http://127.0.0.1:8787/v1</code> —— <b>带 <code>/v1</code></b></div>
+        <div><b>Anthropic Messages</b>（Claude Code 等）：Base URL <code>http://127.0.0.1:8787</code> —— <span class="warntext">不带 <code>/v1</code>！</span> Anthropic SDK 会自己拼 <code>/v1/messages</code>，若这里也填 <code>/v1</code> 会变成 <code>/v1/v1/messages</code> 而报 404。</div>
+      </div>
+      <div class="fieldlist">
+        <div class="field"><span class="k">Base URL</span><span class="v" id="i-base">—</span></div>
+        <div class="field"><span class="k">模型</span><span class="v" id="i-models">—</span></div>
+        <div class="field"><span class="k">提示词</span><span class="v" id="i-agent">—</span></div>
+        <div class="field"><span class="k">鉴权</span><span class="v" id="i-auth">—</span></div>
+      </div>
+      <pre class="code" id="snippet"><span class="c"># 任意 OpenAI 兼容客户端</span>
+<span class="k">base_url</span> = <span class="s">"http://127.0.0.1:8787/v1"</span>
+<span class="k">api_key</span>  = <span class="s">"&lt;在下方新建的密钥&gt;"</span>
+
+<span class="c"># curl 自测</span>
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"authorization: Bearer $TA_KEY"</span> \
+  -d <span class="s">'{"model":"chat-flash","messages":[{"role":"user","content":"hi"}]}'</span></pre>
+    </section>
+
     <section class="card panel">
       <div class="panel-head">
         <h2>API 密钥</h2>
@@ -465,17 +533,6 @@
       <div class="rc-foot"><span class="hint2" id="rcStatus"></span></div>
     </section>
 
-    <section class="card panel" id="ptsPanel">
-      <div class="panel-head">
-        <h2>积分福利社</h2>
-        <span class="hint">TeleAgent 官方账号的积分余额与每日签到（只读查询 + 手动领取，与官方客户端同一账号）</span>
-        <div class="spacer"></div>
-        <button class="btn sm" id="ptsRefresh">刷新</button>
-        <button class="btn primary sm" id="ptsSign">领取今日积分</button>
-      </div>
-      <div id="ptsBody"><span class="hint">加载中…</span></div>
-    </section>
-
     <section class="card panel">
       <div class="panel-head">
         <h2>运行日志</h2>
@@ -492,53 +549,6 @@
       </div>
       <div class="runlog" id="runlog"><span class="ln">加载中…</span></div>
     </section>
-
-    <section class="card panel" id="accessPanel">
-      <div class="panel-head">
-        <h2>接入信息</h2>
-        <div class="spacer"></div>
-        <button class="btn sm" id="copyCurl">复制示例</button>
-      </div>
-      <p class="panel-note">这个网关把 TeleAgent 的免费额度包装成标准的 OpenAI / Anthropic / Responses 接口，
-        供 WorkBuddy 等客户端直接调用。下面 Base URL 填到客户端的服务地址里，模型名任选其一，
-        鉴权用你在下方「API 密钥」生成的 <code>ta-sk-</code> 开头的密钥。所有请求只在本机转发，
-        密钥和用量都留在本机；缓存、自动重试、长对话存档等行为见「稳定性设置」。</p>
-      <div class="fieldlist">
-        <div class="field"><span class="k">Base URL</span><span class="v" id="i-base">—</span></div>
-        <div class="field"><span class="k">模型</span><span class="v" id="i-models">—</span></div>
-        <div class="field"><span class="k">提示词</span><span class="v" id="i-agent">—</span></div>
-        <div class="field"><span class="k">鉴权</span><span class="v" id="i-auth">—</span></div>
-      </div>
-      <pre class="code" id="snippet"><span class="c"># 任意 OpenAI 兼容客户端</span>
-<span class="k">base_url</span> = <span class="s">"http://127.0.0.1:8787/v1"</span>
-<span class="k">api_key</span>  = <span class="s">"&lt;在下方新建的密钥&gt;"</span>
-
-<span class="c"># curl 自测</span>
-curl http://127.0.0.1:8787/v1/chat/completions \
-  -H <span class="s">"content-type: application/json"</span> \
-  -H <span class="s">"authorization: Bearer $TA_KEY"</span> \
-  -d <span class="s">'{"model":"chat-flash","messages":[{"role":"user","content":"hi"}]}'</span></pre>
-    </section>
-
-    <div class="grid2">
-      <section class="card panel">
-        <div class="panel-head">
-          <h2>最近积分消耗</h2>
-          <span class="hint">官方按次记录</span>
-          <div class="spacer"></div>
-          <button class="btn sm" id="usageRefresh">刷新</button>
-        </div>
-        <div id="ptsUsage"><span class="hint">加载中…</span></div>
-      </section>
-
-      <section class="card panel">
-        <div class="panel-head">
-          <h2>最近调用</h2>
-          <span class="hint">最多保留 200 条</span>
-        </div>
-        <div class="log" id="log"></div>
-      </section>
-    </div>
   </main>
 
   <div class="footer">
@@ -907,21 +917,52 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     syncSelection();
   }
 
+  var logPage = 1;
+  function foldLogs(logs) {
+    // 相邻、同密钥、同模型、均正常(2xx/3xx)、相隔<=5分钟 -> 折叠为一条并计数
+    var out = [];
+    logs.forEach(function (l) {
+      var ok = l.status >= 200 && l.status < 400;
+      var prev = out[out.length - 1];
+      if (prev && ok && prev.ok && prev.keyName === l.keyName && prev.model === l.model &&
+          Math.abs(prev.latestTs - l.ts) <= 5 * 60 * 1000) {
+        prev.count += 1;
+        if (l.ts > prev.latestTs) prev.latestTs = l.ts;
+        prev.rep = l;
+      } else {
+        out.push({ ok: ok, keyName: l.keyName, model: l.model, protocol: l.protocol,
+          status: l.status, ts: l.ts, latestTs: l.ts, count: 1, rep: l });
+      }
+    });
+    return out;
+  }
   function renderLog() {
     var logs = (state.stats && state.stats.recent) || [];
-    if (!logs.length) {
+    var folded = foldLogs(logs);
+    if (!folded.length) {
       $('log').innerHTML = '<div class="empty" style="padding:26px 8px">暂无调用记录</div>';
+      $('logPager').innerHTML = '';
       return;
     }
-    $('log').innerHTML = logs.slice(0, 24).map(function (l) {
-      var ok = l.status >= 200 && l.status < 400;
+    var perPage = 10, pages = Math.max(1, Math.ceil(folded.length / perPage));
+    if (logPage > pages) logPage = pages;
+    var slice = folded.slice((logPage - 1) * perPage, logPage * perPage);
+    $('log').innerHTML = slice.map(function (g) {
+      var l = g.rep;
+      var badge = g.count > 1 ? ('×' + g.count) : (l.status || 0);
       return '<div class="log-row">' +
-        '<span class="t">' + fmtClock(l.ts) + '</span>' +
+        '<span class="t" title="' + fmtClock(g.latestTs) + '">' + fmtClock(l.ts) + '</span>' +
         '<span class="m" title="' + esc(l.keyName + ' · ' + l.model + ' · ' + l.protocol) + '">' +
-          esc(l.keyName) + ' <span class="muted">· ' + esc(l.protocol || '—') + '</span></span>' +
-        '<span class="badge' + (ok ? '' : ' err') + '">' + (l.status || 0) + '</span>' +
+          esc(l.keyName) + ' <span class="muted">· ' + esc(l.protocol || '—') + '</span>' +
+          (g.count > 1 ? ' <span class="muted">(' + esc(l.model || '—') + ')</span>' : '') + '</span>' +
+        '<span class="badge' + (g.ok ? '' : ' err') + '" title="' + (g.count > 1 ? (g.count + ' 次成功请求') : ('状态 ' + l.status)) + '">' + badge + '</span>' +
         '</div>';
     }).join('');
+    $('logPager').innerHTML = '<div class="pts-pager"><button class="btn sm" id="logPrev"' + (logPage<=1?' disabled':'') + '>‹ 上一页</button>' +
+      '<span>第 ' + logPage + ' / ' + pages + ' 页 · 共 ' + folded.length + ' 组 / ' + logs.length + ' 次</span>' +
+      '<button class="btn sm" id="logNext"' + (logPage>=pages?' disabled':'') + '>下一页 ›</button></div>';
+    $('logPrev').addEventListener('click', function(){ logPage--; renderLog(); });
+    $('logNext').addEventListener('click', function(){ logPage++; renderLog(); });
   }
 
   function syncSelection() {
@@ -1244,6 +1285,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   }
   $('ptsRefresh').addEventListener('click', function(){ loadPoints(); });
   $('usageRefresh').addEventListener('click', function(){ loadUsage(1); });
+  $('logRefresh').addEventListener('click', function(){ load(); });
   $('ptsSign').addEventListener('click', function(){
     if(!confirm('确认领取今天的积分？这会向 TeleAgent 官方发起签到领取。')) return;
     var btn=$('ptsSign'); btn.disabled=true; btn.textContent='领取中…';
