@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4] - 2026-11-18
+
+### Changed
+
+- 接入信息中协议表述「OpenAI / Responses（Chat Completions、Codex）」改为更准确的
+  「OpenAI Chat Completions / Responses（前者是绝大多数 AI 客户端的通用格式；后者是 OpenAI 新接口，
+  ChatGPT 桌面版与 Codex 仅支持后者）」。
+
 ## [0.6.3] - 2026-11-18
 
 ### Changed

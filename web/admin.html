@@ -448,8 +448,8 @@
       <p class="panel-note">这个网关把 TeleAgent 的免费额度包装成标准协议接口，供 WorkBuddy 等客户端直接调用。
         鉴权用紧接着「API 密钥」里生成的 <code>ta-sk-</code> 密钥；所有请求只在本机转发，密钥和用量留在本机。</p>
       <div class="proto-note">
-        <div><b>OpenAI / Responses</b>（Chat Completions、Codex）：Base URL <code>http://127.0.0.1:8787/v1</code> —— <b>带 <code>/v1</code></b></div>
-        <div><b>Anthropic Messages</b>（Claude Code 等）：Base URL <code>http://127.0.0.1:8787</code> —— <span class="warntext">不带 <code>/v1</code>！</span> Anthropic SDK 会自己拼 <code>/v1/messages</code>，若这里也填 <code>/v1</code> 会变成 <code>/v1/v1/messages</code> 而报 404。</div>
+        <div><b>OpenAI Chat Completions / Responses</b>（前者是绝大多数 AI 客户端的通用格式；后者是 OpenAI 新接口，ChatGPT 桌面版与 Codex 仅支持后者）<br />Base URL <code>http://127.0.0.1:8787/v1</code> —— <b>带 <code>/v1</code></b></div>
+        <div><b>Anthropic Messages</b>（Claude Code 等）<br />Base URL <code>http://127.0.0.1:8787</code> —— <span class="warntext">不带 <code>/v1</code>！</span> Anthropic SDK 会自己拼 <code>/v1/messages</code>，若这里也填 <code>/v1</code> 会变成 <code>/v1/v1/messages</code> 而报 404。</div>
       </div>
       <div class="fieldlist">
         <div class="field"><span class="k">Base URL</span><span class="v" id="i-base">—</span></div>
