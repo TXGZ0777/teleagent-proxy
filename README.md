@@ -42,8 +42,12 @@ node server.mjs
 对手动启动（`start.cmd` / `node server.mjs`）的实例，先手动把 PID 写进 `runtime/proxy.pid`
 也能用 `stop.cmd` 停止；否则请用任务管理器结束对应 `node.exe`。
 
-> 注：后台模式没有实时日志窗口，排障时可读 `runtime/proxy-launch.log` 与内核日志
-> `runtime/data*/log/super-agent-server-*.log`，或用前台 `start.cmd` 观察。
+> 注：后台模式没有实时日志窗口，但有三处可看日志：
+> ① 管理台网页 `/admin` 的「运行日志」区（每 10 秒自动刷新，可暂停/选条数）；
+> ② `runtime/proxy.log`（UTF-8，所有代理日志落盘）；
+> ③ 内核日志 `runtime/data*/log/super-agent-server-*.log`。
+> 启动脚本会轮询 `/healthz`，弹出「STARTUP OK / FAILED」提示。
+> 后台进程已脱离终端，关闭启动它的窗口不会结束代理；停止请用 `stop.cmd`。
 
 启动后（日志带毫秒时间戳，可与内核日志对表排障）：
 

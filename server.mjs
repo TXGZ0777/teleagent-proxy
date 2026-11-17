@@ -17,9 +17,12 @@ import { resetSessions as resetResponsesSessions } from './lib/responses.mjs';
 import { createShim } from './lib/shim.mjs';
 import { createKeyStore } from './lib/keystore.mjs';
 import { createRuntimeConfig } from './lib/runtime-config.mjs';
-import { log, warn, error } from './lib/log.mjs';
+import { log, warn, error, setLogFile } from './lib/log.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// 日志落盘：静默启动没有终端，proxy.log 与管理台日志区是主要排障入口（runtime/ 已 gitignore）。
+setLogFile(path.join(here, 'runtime', 'proxy.log'));
+
 const missing = ensureTeleAgentLayout();
 if (missing.length > 0) {
   console.error('找不到 TeleAgent 安装/登录信息：\n  ' + missing.join('\n  '));

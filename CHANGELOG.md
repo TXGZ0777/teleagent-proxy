@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.7] - 2026-11-18
+
+### Added
+
+- **管理台「运行日志」区**：显示最近代理日志（内存环形缓冲，最多 500 条），每 10 秒自动刷新，
+  可选 100/200/500 条、滚动跟随、手动刷新。新增 `GET /admin/api/logs?n=`。
+  `lib/log.mjs` 改造为 控制台 + 内存环形缓冲 + 落盘 `runtime/proxy.log`（UTF-8）——
+  静默启动没有终端时，网页与 proxy.log 成为主要排障入口。
+- **start.vbs 启动结果弹窗**：启动后轮询 `/healthz`（最多约 180 秒，兼容 `TA_PORT`），
+  成功弹 `STARTUP OK`、超时/失败弹 `STARTUP FAILED`（附排查提示）。
+  已在运行则提示 `ALREADY RUNNING`。后台进程脱离终端，关掉启动窗口不影响运行。
+
 ## [0.4.6] - 2026-11-17
 
 ### Changed

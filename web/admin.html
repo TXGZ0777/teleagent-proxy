@@ -211,6 +211,17 @@
   .rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
   .rc-foot .hint2 { font-size: 11.5px; color: var(--muted); }
 
+  /* ---------- 运行日志 ---------- */
+  .runlog {
+    background: #12161d; color: #c9d3e0; border-radius: 10px; padding: 12px 14px;
+    font: 12px/1.6 var(--mono); height: 300px; overflow-y: auto; white-space: pre-wrap;
+    word-break: break-all; border: 1px solid #1e2530;
+  }
+  .runlog .ln { display: block; }
+  .runlog .lv-WARN { color: #f0c674; }
+  .runlog .lv-ERROR { color: #ff8a80; }
+  .runlog .lv-INFO { color: #c9d3e0; }
+
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
     display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center;
@@ -396,6 +407,23 @@
       </div>
       <div class="rc-list" id="rcList"><div class="hint">加载中…</div></div>
       <div class="rc-foot"><span class="hint2" id="rcStatus"></span></div>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-head">
+        <h2>运行日志</h2>
+        <span class="hint">最近代理日志，自动刷新；完整落盘见 runtime/proxy.log</span>
+        <div class="spacer"></div>
+        <label class="kv" for="runlogN">条数</label>
+        <select class="mode" id="runlogN">
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
+        </select>
+        <label class="kv" for="runlogAuto"><input type="checkbox" id="runlogAuto" checked /> 自动刷新</label>
+        <button class="btn sm" id="runlogRefresh">刷新</button>
+      </div>
+      <div class="runlog" id="runlog"><span class="ln">加载中…</span></div>
     </section>
 
     <div class="grid2">
@@ -1034,6 +1062,33 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     load();
   });
 
+  /* ---------- 运行日志 ---------- */
+  var logStick = true; // 是否粘着底部（用户往上滚则暂停跟随）
+  function loadLogs() {
+    var n = $('runlogN').value;
+    api('/admin/api/logs?n=' + n).then(function (d) {
+      var box = $('runlog');
+      var lines = (d.lines || []);
+      if (!lines.length) { box.innerHTML = '<span class="ln">（暂无日志）</span>'; return; }
+      var html = '';
+      lines.forEach(function (line) {
+        var lv = 'INFO';
+        var m = line.match(/\[(INFO|WARN|ERROR)\]/);
+        if (m) lv = m[1];
+        html += '<span class="ln lv-' + lv + '">' + esc(line) + '</span>';
+      });
+      var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+      box.innerHTML = html;
+      if (logStick && atBottom) box.scrollTop = box.scrollHeight;
+    }).catch(function () {});
+  }
+  $('runlog').addEventListener('scroll', function () {
+    var box = $('runlog');
+    logStick = (box.scrollHeight - box.scrollTop - box.clientHeight < 40);
+  });
+  $('runlogRefresh').addEventListener('click', loadLogs);
+  $('runlogN').addEventListener('change', loadLogs);
+
   /* ---------- 运行时配置 ---------- */
   var rcType = {}; // 缓存每项类型，供保存时组装 patch
   function renderRuntime() {
@@ -1113,10 +1168,12 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 
   /* ---------- 轮询 ---------- */
   load();
+  loadLogs();
   timer = setInterval(function () {
     if (document.hidden) return;
     if (document.querySelector('.backdrop.show')) return;
     load();
+    if ($('runlogAuto').checked) loadLogs();
   }, 10000);
 })();
 </script>
