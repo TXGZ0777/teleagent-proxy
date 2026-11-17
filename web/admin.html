@@ -1183,6 +1183,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
       var st=$('ptsFootStatus'), on=this.checked; st.textContent='保存中…';
       api('/admin/api/runtime',{method:'POST',body:{usageFootnote:on}}).then(function(){
         st.textContent='✓ 已保存'; setTimeout(function(){ st.textContent=''; },2500);
+        load(); // 刷新 state，让稳定性面板按需显示/隐藏"尾注等待(ms)"
       }).catch(function(e){ st.textContent='保存失败'; alert('保存失败：'+e.message); });
     });
   }
@@ -1261,8 +1262,11 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     // 正在编辑时不重建，避免打断输入
     if (list.dataset.built === '1' && list.contains(document.activeElement)) return;
     var html = '';
+    var footnoteOn = rt.usageFootnote && rt.usageFootnote.value === true;
     Object.keys(rt).forEach(function (name) {
       if (name === 'autoSign' || name === 'usageFootnote') return; // 这两项在积分面板单独控制
+      // 尾注等待时长仅在"回复末尾显示积分"开启时显示
+      if (name === 'footnoteWaitMs' && !footnoteOn) { delete rcType[name]; return; }
       var it = rt[name];
       var isBool = (typeof it.value === 'boolean');
       rcType[name] = isBool ? 'bool' : 'num';
