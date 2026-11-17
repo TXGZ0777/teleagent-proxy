@@ -13,6 +13,7 @@
 | 常规看门狗(ms) | `TA_STREAM_IDLE_MS` | 数字 |
 | 存档触发字符 | `TA_ARCHIVE_MIN_CHARS` | 数字 |
 | 近期消息字符 | `TA_RECENT_CHARS` | 数字 |
+| 自动签到（在积分面板） | `TA_AUTO_SIGN` | 三档：`2`=启动检查(默认) / `0`=关闭 / `1`=启动+每小时 |
 
 优先级：**管理台配置文件 > 环境变量 > 代码默认**。即管理台改过的值会覆盖 `start.cmd` 里的 `set`；
 点「恢复默认」会删除覆盖、回到环境变量/默认值。配置文件路径可用 `TA_RUNTIME_CONFIG_FILE` 改。
@@ -42,7 +43,7 @@
 | `TA_STREAM_IDLE_MS` | `240000` | 流空闲看门狗：内容无增长超过该时长报 `UPSTREAM_IDLE`。`0`=关闭 |
 | `TA_TURN_TIMEOUT_MS` | `1200000` | 单轮总时长上限（20 分钟） |
 | `TA_GATEWAY_KEY` | — | 上游 gateway key（见下节；也可写 `local.secrets.json`） |
-| `TA_AUTO_SIGN` | 启动检查 | 积分签到行为：`默认/空`=每次启动检查一次、今天没领就顺手领掉；`0`=完全关闭；`1`=启动检查 + 每小时再检查一次（适合长期不重启）。每日最多领一次、幂等。详见 [ADMIN.md](ADMIN.md) |
+| `TA_AUTO_SIGN` | `2` | 积分签到：`2`=启动检查一次(默认) / `0`=关闭 / `1`=启动检查+每小时。可在管理台积分面板三档切换（即时生效、重启保留，优先于环境变量）。每日最多领一次、幂等。详见 [ADMIN.md](ADMIN.md) |
 | `TA_POINTS_BASE_URL` | 官方 | 积分接口 base URL 覆盖（一般不用改） |
 | `TA_POINTS_CHANNEL_ID` / `TA_POINTS_RUNTIME_ENV` | 空 | 积分接口的可选鉴权头（默认空即可用） |
 | `TA_OPEN_ADMIN` | 关 | `start.cmd` 附带 `=1`：服务就绪后自动打开管理台 |

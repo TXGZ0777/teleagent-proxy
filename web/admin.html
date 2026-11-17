@@ -241,14 +241,19 @@
   .pts-item .nm { color: var(--text, #222); }
   .pts-item .meta { color: var(--muted); font-family: var(--mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
   .pts-item.soon .meta { color: #c0392b; font-weight: 600; }
-  .pts-item-wrap { padding: 8px 2px 10px; border-bottom: 1px solid var(--line, #eef1f5); }
+  .pts-item-wrap { padding: 14px 2px 16px; border-bottom: 1px solid var(--line, #eef1f5); }
+  .pts-grid { row-gap: 16px; }
+  .pts-sign, .pts-expiry { line-height: 1.7; margin-top: 10px; }
   .pts-item-wrap .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
   .pts-item-wrap .nm { color: var(--text, #222); }
   .pts-item-wrap .meta { color: var(--muted); font-family: var(--mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
   .pts-item-wrap.soon .meta { color: #c0392b; font-weight: 600; }
-  .pts-bar { height: 6px; border-radius: 4px; background: var(--soft, #eceff4); overflow: hidden; margin-top: 7px; }
+  .pts-bar { height: 7px; border-radius: 4px; background: var(--soft, #eceff4); overflow: hidden; margin-top: 11px; }
   .pts-bar > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3C67FF, #5b8cff); transition: width .3s; }
   .pts-bar.soon > i { background: linear-gradient(90deg, #e67e22, #c0392b); }
+  .pts-autosign { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, #e8ecf2); font-size: 12.5px; }
+  .pts-autosign select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line, #d8dfe8); background: var(--soft, #fff); color: var(--text, #222); font-size: 12.5px; }
+  .pts-autosign .pt { color: var(--ok, #1a7f4b); min-width: 64px; }
 
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
@@ -1140,9 +1145,22 @@ curl http://127.0.0.1:8787/v1/chat/completions \
         '<div class="pts-cell"><div class="k">累计领取</div><div class="v">'+escHtml(s.totalClaimed)+' <small>积分</small></div></div>'+
       '</div>'+ expLine +
       '<div class="pts-sign">'+signTag+'<span class="hint">每天可领 '+escHtml(s.dailyClaimable)+' 积分</span></div>'+
+      '<div class="pts-autosign"><label for="ptsAutoSign">自动签到</label>'+
+        '<select id="ptsAutoSign">'+
+          [['2','启动检查一次（默认）'],['1','启动检查 + 每小时'],['0','关闭']].map(function(o){
+            return '<option value="'+o[0]+'"'+(String(d.autoSign===undefined?2:d.autoSign)===o[0]?' selected':'')+'>'+o[1]+'</option>';
+          }).join('')+
+        '</select><span class="pt" id="ptsAutoStatus"></span>'+
+        '<span class="hint">即时生效，重启保留</span></div>'+
       itemsHtml;
     $('ptsSign').disabled = !!s.claimedToday;
     $('ptsSign').textContent = s.claimedToday ? '今日已领取' : '领取今日积分';
+    $('ptsAutoSign').addEventListener('change', function(){
+      var st=$('ptsAutoStatus'); st.textContent='保存中…';
+      api('/admin/api/runtime',{method:'POST',body:{autoSign:this.value}}).then(function(){
+        st.textContent='✓ 已保存'; setTimeout(function(){ st.textContent=''; },2500);
+      }).catch(function(e){ st.textContent='保存失败'; alert('保存失败：'+e.message); });
+    });
   }
   function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
   $('ptsRefresh').addEventListener('click', loadPoints);
@@ -1194,6 +1212,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     if (list.dataset.built === '1' && list.contains(document.activeElement)) return;
     var html = '';
     Object.keys(rt).forEach(function (name) {
+      if (name === 'autoSign') return; // 自动签到在积分面板单独控制
       var it = rt[name];
       var isBool = (typeof it.value === 'boolean');
       rcType[name] = isBool ? 'bool' : 'num';
