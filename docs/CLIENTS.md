@@ -147,6 +147,19 @@ $env:TA_KEY = "dummy"     # 网关没开 TA_API_KEY 时值随意
 codex exec --skip-git-repo-check "只回答两个字：收到"
 ```
 
+**CLI / 桌面端 / IDE 插件共用一套配置**：`~/.codex/config.toml`（Windows 是
+`%USERPROFILE%\.codex\config.toml`）由 Codex CLI、ChatGPT 桌面端（Codex 模式）和
+VS Code 等编辑器插件共同读取，上面的配置写一份、三端生效（官方文档口径）。注意：
+
+- `model_provider` / `model_providers` 只在**用户级**配置生效，项目级
+  `.codex/config.toml` 会忽略这两项。
+- 桌面端/插件从 GUI 启动，不继承终端 `$env:` 设置的变量：要让 `env_key` 指定的
+  `TA_KEY` 对它们生效，用 `setx TA_KEY "dummy"` 设为用户级环境变量，然后**完全退出**
+  应用再重开（残留后台进程会持有旧配置）。
+- VS Code 插件的权限下拉（Chat / Agent / Agent (Full Access)）会覆盖 config.toml 的
+  `approval_policy` / `sandbox_mode`，要用配置文件里的权限设置需选 **Custom (config.toml)**。
+- 共享的只是配置文件：当前项目、会话、临时模型三端各自独立。
+
 实测（Codex CLI 0.125.0，Windows）：
 
 ```
