@@ -424,7 +424,7 @@
 
     <section class="card panel" id="ptsPanel">
       <div class="panel-head">
-        <h2>积分福利社</h2>
+        <h2>积分明细</h2>
         <span class="hint">TeleAgent 官方账号的积分余额与每日签到（只读查询 + 手动领取，与官方客户端同一账号）</span>
         <div class="spacer"></div>
         <button class="btn sm" id="ptsRefresh">刷新</button>
@@ -1203,7 +1203,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     var items = d.items || [];
     var soonCnt = items.filter(function(x){ return x.daysLeft!=null && x.daysLeft<=7; }).length;
     var itemsHtml = items.length
-      ? '<details class="pts-details"><summary>积分明细（'+items.length+' 笔'+(soonCnt?' · '+soonCnt+' 笔即将到期':'')+'）</summary><div class="pts-items">'+
+      ? '<details class="pts-details"><summary>积分概览（'+items.length+' 笔'+(soonCnt?' · '+soonCnt+' 笔即将到期':'')+'）</summary><div class="pts-items">'+
         items.map(function(x){
           var dl = x.daysLeft;
           var soon = dl!=null && dl<=7;
