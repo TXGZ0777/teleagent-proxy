@@ -35,6 +35,16 @@ cd teleagent-proxy
 node server.mjs
 ```
 
+**后台静默运行（无黑窗）**：双击 `start.vbs` 即可。它在后台启动 node（不弹控制台窗口），
+把进程 PID 写入 `runtime/proxy.pid`，启动记录写到 `runtime/proxy-launch.log`。
+重复双击会检测已在运行并跳过。要停止时运行 `stop.cmd`：它读 PID 文件、优雅关闭
+（发终止信号让服务清理内核与端口，最多等 15 秒，超时才强杀），然后删掉 PID 文件。
+对手动启动（`start.cmd` / `node server.mjs`）的实例，先手动把 PID 写进 `runtime/proxy.pid`
+也能用 `stop.cmd` 停止；否则请用任务管理器结束对应 `node.exe`。
+
+> 注：后台模式没有实时日志窗口，排障时可读 `runtime/proxy-launch.log` 与内核日志
+> `runtime/data*/log/super-agent-server-*.log`，或用前台 `start.cmd` 观察。
+
 启动后（日志带毫秒时间戳，可与内核日志对表排障）：
 
 ```

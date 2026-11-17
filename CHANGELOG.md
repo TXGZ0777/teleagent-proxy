@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.5] - 2026-11-17
+
+### Added
+
+- **后台静默运行脚本**：`start.vbs` 双击后在后台启动（无控制台窗口），PID 由 server.mjs
+  写入 `runtime/proxy.pid`，启动记录写 `runtime/proxy-launch.log`；重复双击会检测并跳过。
+  `stop.cmd` 读 PID 文件、**优雅停止**（先发终止信号，等最多 15 秒才强杀），清理 PID 文件。
+  已实测完整启停链路：后台启动 → healthz 通过 → 停止 → 端口释放、无残留进程。
+- server.mjs 增加 PID 文件管理与 **SIGHUP 监听**：Windows `taskkill`（不带 /F）发的是 SIGHUP
+  而非 SIGTERM，不监听会绕过 shutdown 导致内核子进程/端口残留。
+
 ## [0.4.4] - 2026-11-17
 
 ### Added

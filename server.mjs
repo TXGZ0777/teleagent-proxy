@@ -48,6 +48,20 @@ if (models.length === 0) {
 log(`账号 ${auth.claims?.accountName ?? '?'} · kernel ${kernelVersion()}`);
 
 const runtimeRoot = path.join(here, 'runtime');
+
+// PID 文件：供 start.vbs / stop.cmd 精确管理后台进程（避免误杀别的 node）。
+import fs from 'node:fs';
+const pidFile = path.join(runtimeRoot, 'proxy.pid');
+try {
+  fs.mkdirSync(runtimeRoot, { recursive: true });
+  fs.writeFileSync(pidFile, String(process.pid));
+} catch {}
+const clearPidFile = () => {
+  try {
+    if (fs.readFileSync(pidFile, 'utf8').trim() === String(process.pid)) fs.unlinkSync(pidFile);
+  } catch {}
+};
+process.on('exit', clearPidFile);
 const authState = { token: auth.token, deviceId: meta.deviceId, installId: meta.installId };
 
 /**
@@ -264,6 +278,9 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+// Windows: taskkill（不带 /F）发的是 SIGHUP 而非 SIGTERM —— 也走优雅关闭，
+// 否则 stop.cmd 只能强杀，残留内核子进程与端口占用。
+if (process.platform === 'win32') process.on('SIGHUP', shutdown);
 process.on('exit', () => {
   try {
     keystore.flush();
