@@ -14,6 +14,9 @@
 | `TA_DEFAULT_MODEL` | 目录第一个 | 客户端模型名匹配不上时的兜底 |
 | `TA_ALLOW_KERNEL_TOOLS` | 关 | 设为 `1` 才放行 kernel 自带的 bash/read/write 等工具（默认全禁） |
 | `TA_KERNEL_POOL_MAX` | `3` | kernel 池上限（按提示词指纹池化，LRU 只淘汰闲置 10 分钟以上的实例） |
+| `TA_AUTO_RETRY` | `1` | `UPSTREAM_IDLE` 且未输出任何正文时，自动重建会话续接一次（等价 WorkBuddy 重试按钮）。`0`=关闭。详见 [RELIABILITY.md](RELIABILITY.md) |
+| `TA_RETRY_IDLE_MS` | `120000` | 自动续接那一次的流空闲看门狗（比常规 240s 短，避免超过客户端 300s 超时） |
+| `TA_RECYCLE_CACHE_CHARS` | `60000` | 会话 cacheRead 超此值即主动重建（预防性换干净上下文）。`0`=关闭 |
 | `TA_ARCHIVE_MIN_CHARS` | `12000` | 长对话历史存档触发阈值：首轮历史超此值时完整落盘、只发最近摘要+检索指针。设极大值可关闭。详见 [RELIABILITY.md](RELIABILITY.md) |
 | `TA_RECENT_CHARS` | `10000` | 存档模式下发给模型的最近消息预算（字符） |
 | `TA_MAX_FOLD_CHARS` | `40000` | 单轮 prompt 体积预算（首轮折叠与增量轮共用）；超限丢最旧工具结果。`0`=关闭。详见 [RELIABILITY.md](RELIABILITY.md) |
