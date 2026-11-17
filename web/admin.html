@@ -254,6 +254,15 @@
   .pts-autosign { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, #e8ecf2); font-size: 12.5px; }
   .pts-autosign select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line, #d8dfe8); background: var(--soft, #fff); color: var(--text, #222); font-size: 12.5px; }
   .pts-autosign .pt { color: var(--ok, #1a7f4b); min-width: 64px; }
+  .pts-usage { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, #e8ecf2); }
+  .pts-usage-head { display: flex; align-items: center; gap: 10px; font-size: 12.5px; margin-bottom: 8px; }
+  .pts-usage-head summary { cursor: pointer; color: var(--accent, #3C67FF); }
+  .pts-usage table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .pts-usage th, .pts-usage td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line, #eef1f5); }
+  .pts-usage th { color: var(--muted); font-weight: 600; }
+  .pts-usage td.num { font-family: var(--mono); text-align: right; }
+  .pts-usage td.cost { color: #c0392b; font-weight: 600; }
+  .pts-legend { color: var(--muted); font-size: 11px; }
 
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
@@ -451,6 +460,7 @@
         <button class="btn primary sm" id="ptsSign">领取今日积分</button>
       </div>
       <div id="ptsBody"><span class="hint">加载中…</span></div>
+      <div id="ptsUsage"><span class="hint">用量记录加载中…</span></div>
     </section>
 
     <section class="card panel">
@@ -1152,6 +1162,10 @@ curl http://127.0.0.1:8787/v1/chat/completions \
           }).join('')+
         '</select><span class="pt" id="ptsAutoStatus"></span>'+
         '<span class="hint">即时生效，重启保留</span></div>'+
+      '<div class="pts-autosign"><label class="sw"><input type="checkbox" id="ptsFootnote"'+(d.usageFootnote?' checked':'')+'><span class="track"></span></label>'+
+        '<label for="ptsFootnote">回复末尾显示本次消耗积分</label>'+
+        '<span class="pt" id="ptsFootStatus"></span>'+
+        '<span class="hint">默认关；开启后每次回复最多多等 3 秒查官方记录，工具调用轮不加</span></div>'+
       itemsHtml;
     $('ptsSign').disabled = !!s.claimedToday;
     $('ptsSign').textContent = s.claimedToday ? '今日已领取' : '领取今日积分';
@@ -1161,9 +1175,34 @@ curl http://127.0.0.1:8787/v1/chat/completions \
         st.textContent='✓ 已保存'; setTimeout(function(){ st.textContent=''; },2500);
       }).catch(function(e){ st.textContent='保存失败'; alert('保存失败：'+e.message); });
     });
+    $('ptsFootnote').addEventListener('change', function(){
+      var st=$('ptsFootStatus'), on=this.checked; st.textContent='保存中…';
+      api('/admin/api/runtime',{method:'POST',body:{usageFootnote:on}}).then(function(){
+        st.textContent='✓ 已保存'; setTimeout(function(){ st.textContent=''; },2500);
+      }).catch(function(e){ st.textContent='保存失败'; alert('保存失败：'+e.message); });
+    });
   }
   function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
-  $('ptsRefresh').addEventListener('click', loadPoints);
+  function fmtTime(s){ return s ? String(s).replace('T',' ').slice(0,19) : '—'; }
+  function loadUsage(){
+    api('/admin/api/points/usage?n=10').then(function(d){
+      var box=$('ptsUsage');
+      if(!d || d.enabled===false || d.ok===false){ box.innerHTML='<span class="hint">用量记录不可用'+(d&&d.error?'：'+escHtml(d.error):'')+'</span>'; return; }
+      var rows=(d.list||[]).map(function(x){
+        var disc = x.totalUsageOriginal>0 ? Math.round((1-x.totalUsage/x.totalUsageOriginal)*100) : 0;
+        return '<tr><td>'+escHtml(fmtTime(x.statTime))+'</td><td>'+escHtml(x.model)+'</td>'+
+          '<td class="num">'+escHtml(x.totalUsage)+'</td><td class="num">'+escHtml(x.totalUsageOriginal)+'</td>'+
+          '<td class="num">'+(disc>0?'-'+disc+'%':'—')+'</td></tr>';
+      }).join('');
+      var ov=d.overview||{};
+      box.innerHTML='<details class="pts-usage" open><summary>最近积分消耗（共 '+escHtml(d.total)+' 条记录）</summary>'+
+        (ov.pointsUsed!==undefined?'<div class="pts-legend">累计消耗 '+escHtml(ov.pointsUsed)+' 积分 · 任务 '+escHtml(ov.taskCount)+' · 调用 '+escHtml(ov.callCount)+'</div>':'')+
+        '<table><thead><tr><th>时间</th><th>模型</th><th style="text-align:right">实际积分</th><th style="text-align:right">原价</th><th style="text-align:right">折扣</th></tr></thead>'+
+        '<tbody>'+(rows||'<tr><td colspan="5" class="hint">暂无记录</td></tr>')+'</tbody></table>'+
+        '<div class="pts-legend">数据来自 TeleAgent 官方按次用量记录，与官方客户端显示一致；可能有数秒延迟。</div></details>';
+    }).catch(function(e){ $('ptsUsage').innerHTML='<span class="hint">用量加载失败：'+escHtml(e.message)+'</span>'; });
+  }
+  $('ptsRefresh').addEventListener('click', function(){ loadPoints(); loadUsage(); });
   $('ptsSign').addEventListener('click', function(){
     if(!confirm('确认领取今天的积分？这会向 TeleAgent 官方发起签到领取。')) return;
     var btn=$('ptsSign'); btn.disabled=true; btn.textContent='领取中…';
@@ -1212,7 +1251,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     if (list.dataset.built === '1' && list.contains(document.activeElement)) return;
     var html = '';
     Object.keys(rt).forEach(function (name) {
-      if (name === 'autoSign') return; // 自动签到在积分面板单独控制
+      if (name === 'autoSign' || name === 'usageFootnote') return; // 这两项在积分面板单独控制
       var it = rt[name];
       var isBool = (typeof it.value === 'boolean');
       rcType[name] = isBool ? 'bool' : 'num';
@@ -1283,6 +1322,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   load();
   loadLogs();
   loadPoints();
+  loadUsage();
   timer = setInterval(function () {
     if (document.hidden) return;
     if (document.querySelector('.backdrop.show')) return;

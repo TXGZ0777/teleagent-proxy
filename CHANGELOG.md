@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.4] - 2026-11-18
+
+### Added
+
+- **管理台显示按次积分消耗**：积分面板新增「最近积分消耗」表格（时间/模型/实际积分/原价/折扣）
+  与总览，数据来自官方 `/user/portal/usage/stats/record`，与官方 App 扣分一致、比每日汇总精确。
+  新增 `GET /admin/api/points/usage?n=`。
+- `lib/points.mjs` 新增 `getUsageRecords()` / `getUsageOverview()` / `findUsageAfter()`。
+- **可选回复尾注**（默认关）：开启后在回复末尾追加"（本次消耗 X 积分）"，轮询官方记录最多
+  等 `TA_FOOTNOTE_WAIT_MS`（默认 3000ms）。实测官方写入常延迟 3–5 秒，3 秒内可能取不到而不显示；
+  尾注会延迟回复，工具调用轮不加。开关在积分面板，等待时长在稳定性设置。
+
 ## [0.5.3] - 2026-11-18
 
 ### Changed
