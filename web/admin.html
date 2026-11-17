@@ -247,10 +247,15 @@
   .pts-item-wrap { padding: 14px 2px 16px; border-bottom: 1px solid var(--line, #eef1f5); }
   .pts-grid { row-gap: 16px; }
   .pts-sign, .pts-expiry { line-height: 1.7; margin-top: 10px; }
-  .pts-item-wrap .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-  .pts-item-wrap .nm { color: var(--text, #222); }
-  .pts-item-wrap .meta { color: var(--muted); font-family: var(--mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
-  .pts-item-wrap.soon .meta { color: #c0392b; font-weight: 600; }
+  .pts-item-wrap .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; align-items: baseline; }
+  .pts-item-wrap .row + .row { margin-top: 6px; }
+  .pts-item-wrap .nm { color: var(--text, #222); font-weight: 600; }
+  .pts-item-wrap .expire { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .pts-item-wrap .used { color: var(--ink-2); font-family: var(--mono); font-size: 11.5px; }
+  .pts-item-wrap .state { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .pts-item-wrap .state.remain { color: var(--accent); }
+  .pts-item-wrap .state.used-up { color: var(--danger); }
+  .pts-item-wrap.soon .expire { color: #c0392b; font-weight: 600; }
   .pts-bar { height: 7px; border-radius: 4px; background: var(--soft, #eceff4); overflow: hidden; margin-top: 11px; }
   .pts-bar > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3C67FF, #5b8cff); transition: width .3s; }
   .pts-bar.soon > i { background: linear-gradient(90deg, #e67e22, #c0392b); }
@@ -1201,20 +1206,25 @@ curl http://127.0.0.1:8787/v1/chat/completions \
         '（剩 '+escHtml(exp.daysLeft==null?'—':exp.daysLeft+' 天')+'）· 每笔积分自领取起约 30 天有效</div>'
       : '';
     var items = d.items || [];
-    var soonCnt = items.filter(function(x){ return x.daysLeft!=null && x.daysLeft<=7; }).length;
+    var soonCnt = items.filter(function(x){ return !x.usedUp && x.daysLeft!=null && x.daysLeft<=7; }).length;
     var itemsHtml = items.length
-      ? '<details class="pts-details"><summary>积分概览（'+items.length+' 笔'+(soonCnt?' · '+soonCnt+' 笔即将到期':'')+'）</summary><div class="pts-items">'+
+      ? '<details class="pts-details" open><summary>积分概览（'+items.length+' 笔'+(soonCnt?' · '+soonCnt+' 笔即将到期':'')+'）</summary><div class="pts-items">'+
         items.map(function(x){
           var dl = x.daysLeft;
-          var soon = dl!=null && dl<=7;
+          var soon = !x.usedUp && dl!=null && dl<=7;
           var pct = x.remainPct;
-          var bar = pct!=null
+          var bar = (pct!=null && !x.usedUp)
             ? '<div class="pts-bar'+(soon?' soon':'')+'"><i style="width:'+pct+'%"></i></div>'
             : '';
+          var exp = fmtExpire(x.effectiveEnd);
+          var state = x.usedUp
+            ? '<span class="state used-up">已用完</span>'
+            : (pct!=null ? '<span class="state remain">剩余'+pct+'%</span>' : '');
           return '<div class="pts-item-wrap'+(soon?' soon':'')+'">'+
             '<div class="row"><span class="nm">'+escHtml(x.name)+'</span>'+
-            '<span class="meta">'+escHtml(x.balance)+' / '+escHtml(x.totalQuota)+' 分'+(pct!=null?'（剩'+pct+'%）':'')+
-            ' · 至 '+escHtml(String(x.effectiveEnd||'').slice(0,10))+(dl!=null?' · '+dl+'天':'')+'</span></div>'+ bar +'</div>';
+            '<span class="expire">到期时间 '+escHtml(exp)+'</span></div>'+
+            '<div class="row"><span class="used">已使用 '+escHtml(x.usedQuota)+'/'+escHtml(x.totalQuota)+'</span>'+
+            state+'</div>'+ bar +'</div>';
         }).join('')+'</div></details>'
       : '';
     box.innerHTML =
@@ -1254,6 +1264,15 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   }
   function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
   function fmtStatTime(s){ return s ? String(s).replace('T',' ').slice(0,19) : '—'; }
+  function fmtExpire(s){
+    if(!s) return '—';
+    var t = String(s).replace('T',' ').trim();
+    var m = t.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ +](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if(!m) return escHtml(t);
+    var d = m[1]+'/'+String(m[2]).padStart(2,'0')+'/'+String(m[3]).padStart(2,'0');
+    if(m[4]!=null) d += ' '+String(m[4]).padStart(2,'0')+':'+m[5]+(m[6]!=null?':'+m[6]:'');
+    return d;
+  }
   var usagePage = 1;
   function loadUsage(page){
     usagePage = page || usagePage || 1;
