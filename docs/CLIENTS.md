@@ -1,7 +1,17 @@
 # 客户端接入
 
-端点统一是 `http://127.0.0.1:8787/v1`；三条协议（OpenAI / Responses / Anthropic）
-共用同一套会话映射、上下文裁剪与工具中继。
+三条协议（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages）共用同一套
+会话映射、上下文裁剪与工具中继，但**客户端填的 baseURL 不一样**：
+
+| 协议 | 网关实际路径 | 客户端 baseURL | 路径规则 |
+|---|---|---|---|
+| OpenAI Chat Completions | `POST /v1/chat/completions` | `http://127.0.0.1:8787/v1`（带 `/v1`） | 客户端在 baseURL 后拼 `/chat/completions`；裸 `/chat/completions`（不带 `/v1`）也兼容 |
+| OpenAI Responses | `POST /v1/responses` | `http://127.0.0.1:8787/v1`（带 `/v1`） | 必须带 `/v1`，客户端在 baseURL 后拼 `/responses` |
+| Anthropic Messages | `POST /v1/messages` | `http://127.0.0.1:8787`（**不带** `/v1`） | 网关只认带 `/v1` 的完整路径；`/v1` 由客户端 SDK 自己拼 |
+
+> 记法：跟各家官方 SDK 的习惯走——OpenAI 系官方 `base_url` 都带 `/v1`
+> （`https://api.openai.com/v1`），SDK 在后面拼 `/chat/completions`、`/responses`；
+> Anthropic 官方 `base_url` 不带（`https://api.anthropic.com`），SDK 自己拼 `/v1/messages`。
 
 ## OpenAI SDK / 任意兼容客户端
 
@@ -17,16 +27,88 @@ print(r.choices[0].message.content)
 
 `api_key` 随便填；如果启动时设了 `TA_API_KEY` 或在管理台建了密钥，则必须与之一致。
 
-## Cherry Studio / ChatBox 等图形客户端
+## WorkBuddy 等图形客户端
 
-- API 地址：`http://127.0.0.1:8787/v1`
-- API Key：任意（或与 `TA_API_KEY` 一致）
-- 模型：`chat-pro` / `chat-flagship` / `chat-flash`
+以 WorkBuddy 为例（Cherry Studio / ChatBox 等同类客户端字段类似）。协议选
+**OpenAI Chat Completions 兼容**，其余按下表填：
+
+| 设置项 | 填什么 |
+|---|---|
+| API 地址（Base URL） | `http://127.0.0.1:8787/v1`（末尾带 `/v1`，**不要**自己再拼 `/chat/completions`） |
+| API Key | 任意；设了 `TA_API_KEY` 或管理台密钥时填一致的 |
+| 模型 ID | `chat-pro` / `chat-flagship` / `chat-flash` |
+| 工具调用（Tools / Function Calling） | **建议开启**，见下 |
+
+**工具调用开关要不要勾？**
+
+- 要让客户端侧的工具生效（联网搜索、读文件、生成图片等），**必须勾选**。
+  网关三条协议都完整支持工具中继：请求里的 `tools` 会被注册成内核侧的 MCP 工具，
+  模型决定调用时网关**挂起不返回**，把调用翻成标准格式交回客户端执行；
+  客户端执行完带着结果回灌，模型接着生成（与下文 Codex CLI 是同一套桥，已实测）。
+- 纯聊天可以不勾。不勾时请求里没有 `tools`，网关按纯对话处理，模型不发起任何工具调用。
+- 安全边界：模型只会调用"客户端发来的工具"。桌面端内核自带的工具在对话中继轮一律关闭，
+  不存在网关自作主张调用本地工具的情况。
 
 ## DSH（DeepSeek Harness）
 
-DSH 内置 provider 只认自己的协议；要用这里的端点，按"OpenAI 兼容自定义 provider"配置，
-`baseURL = http://127.0.0.1:8787/v1`，模型填 `deepseek-account/<你的模型名>` 形式的自定义路由。
+DSH 的 `llm-pi-ai` 插件同时支持三种协议，在 cordis 配置的 `config.providers` 下按需配
+一个或多个 provider。**三种协议的 `baseURL` 规则不同**（以 pi-ai 内置 provider 的官方
+写法为准，已在源码核对）：
+
+| `api` | `baseURL` 填法 | 实际请求路径 |
+|---|---|---|
+| `openai-completions` | `http://127.0.0.1:8787/v1`（带 `/v1`） | `/v1/chat/completions` |
+| `openai-responses` | `http://127.0.0.1:8787/v1`（带 `/v1`） | `/v1/responses` |
+| `anthropic-messages` | `http://127.0.0.1:8787`（**不带** `/v1`） | `/v1/messages`（SDK 自己拼） |
+
+推荐配置（实测生效的形状，三个 provider 的 `models` 块相同，按需启用其一或全配）：
+
+```yaml
+- id: llm-pi-ai
+  config:
+    providers:
+      # 日常推荐：OpenAI Chat Completions
+      teleagent-completions:
+        displayName: TeleAgent 本地反代
+        api: openai-completions
+        baseURL: http://127.0.0.1:8787/v1        # 带 /v1
+        models:
+          - id: chat-flagship
+            contextWindow: 400000
+            maxTokens: 65536
+            name: 旗舰-1x
+          - id: chat-pro
+            contextWindow: 400000
+            maxTokens: 65536
+            name: Pro-0.6x
+          - id: chat-flash
+            contextWindow: 400000
+            maxTokens: 65536
+            name: Flash-0.2x
+        apiKeyEnv: TELEAGENT_API_KEY             # 网关密钥放该环境变量；未启用网关密钥时值随意
+
+      # 需要 Responses 协议时再启用：
+      # teleagent-responses:
+      #   displayName: TeleAgent 反代（Responses）
+      #   api: openai-responses
+      #   baseURL: http://127.0.0.1:8787/v1      # 带 /v1
+      #   （models / apiKeyEnv 同上）
+
+      # 需要 Anthropic 协议时再启用：
+      # teleagent-anthropic:
+      #   displayName: TeleAgent 反代（Anthropic）
+      #   api: anthropic-messages
+      #   baseURL: http://127.0.0.1:8787         # 不带 /v1！SDK 自己拼 /v1/messages
+      #   （models / apiKeyEnv 同上）
+```
+
+使用时模型按 `<provider id>/<model id>` 引用，例如 `teleagent-completions/chat-flash`。
+
+补充：
+
+- `anthropic-messages` 下 DSH 可能调用的 `count_tokens`（`/v1/messages/count_tokens`）网关已实现。
+- 三种协议发来的 `tools` 走同一套工具中继，开关行为见上文 WorkBuddy 一节。
+- 改完配置重启 DSH 生效，模型选择器里出现对应条目。
 
 ## curl
 

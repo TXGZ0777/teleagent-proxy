@@ -87,7 +87,7 @@ node server.mjs
 
 ## 客户端接入
 
-端点统一是 `http://127.0.0.1:8787/v1`。OpenAI SDK / Cherry Studio / ChatBox / DSH /
+端点统一是 `http://127.0.0.1:8787/v1`。OpenAI SDK / WorkBuddy 等图形客户端 / DSH /
 Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.md](docs/CLIENTS.md)**。
 
 ## 稳定性（0.4.1 起）
