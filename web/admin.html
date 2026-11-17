@@ -263,6 +263,7 @@
   .pts-usage td.num { font-family: var(--mono); text-align: right; }
   .pts-usage td.cost { color: #c0392b; font-weight: 600; }
   .pts-legend { color: var(--muted); font-size: 11px; }
+  .pts-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 
   .log { display: grid; gap: 0; max-height: 268px; overflow-y: auto; }
   .log-row {
@@ -1184,8 +1185,10 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   }
   function loadPoints(){ api('/admin/api/points').then(renderPoints).catch(function(e){ $('ptsBody').innerHTML='<span class="hint" style="color:var(--danger)">加载失败：'+escHtml(e.message)+'</span>'; }); }
   function fmtTime(s){ return s ? String(s).replace('T',' ').slice(0,19) : '—'; }
-  function loadUsage(){
-    api('/admin/api/points/usage?n=10').then(function(d){
+  var usagePage = 1;
+  function loadUsage(page){
+    usagePage = page || usagePage || 1;
+    api('/admin/api/points/usage?page='+usagePage).then(function(d){
       var box=$('ptsUsage');
       if(!d || d.enabled===false || d.ok===false){ box.innerHTML='<span class="hint">用量记录不可用'+(d&&d.error?'：'+escHtml(d.error):'')+'</span>'; return; }
       var rows=(d.list||[]).map(function(x){
@@ -1194,15 +1197,20 @@ curl http://127.0.0.1:8787/v1/chat/completions \
           '<td class="num">'+escHtml(x.totalUsage)+'</td><td class="num">'+escHtml(x.totalUsageOriginal)+'</td>'+
           '<td class="num">'+(disc>0?'-'+disc+'%':'—')+'</td></tr>';
       }).join('');
-      var ov=d.overview||{};
-      box.innerHTML='<details class="pts-usage" open><summary>最近积分消耗（共 '+escHtml(d.total)+' 条记录）</summary>'+
+      var ov=d.overview||{}, total=d.total||0, pages=Math.max(1, Math.ceil(total/10));
+      var pager='<div class="pts-pager"><button class="btn sm" id="usagePrev"'+(usagePage<=1?' disabled':'')+'>‹ 上一页</button>'+
+        '<span>第 '+usagePage+' / '+pages+' 页（共 '+total+' 条）</span>'+
+        '<button class="btn sm" id="usageNext"'+(usagePage>=pages?' disabled':'')+'>下一页 ›</button></div>';
+      box.innerHTML='<details class="pts-usage" open><summary>最近积分消耗（共 '+escHtml(total)+' 条记录）</summary>'+
         (ov.pointsUsed!==undefined?'<div class="pts-legend">累计消耗 '+escHtml(ov.pointsUsed)+' 积分 · 任务 '+escHtml(ov.taskCount)+' · 调用 '+escHtml(ov.callCount)+'</div>':'')+
         '<table><thead><tr><th>时间</th><th>模型</th><th style="text-align:right">实际积分</th><th style="text-align:right">原价</th><th style="text-align:right">折扣</th></tr></thead>'+
-        '<tbody>'+(rows||'<tr><td colspan="5" class="hint">暂无记录</td></tr>')+'</tbody></table>'+
+        '<tbody>'+(rows||'<tr><td colspan="5" class="hint">暂无记录</td></tr>')+'</tbody></table>'+ pager +
         '<div class="pts-legend">数据来自 TeleAgent 官方按次用量记录，与官方客户端显示一致；可能有数秒延迟。</div></details>';
+      $('usagePrev').addEventListener('click', function(){ loadUsage(usagePage-1); });
+      $('usageNext').addEventListener('click', function(){ loadUsage(usagePage+1); });
     }).catch(function(e){ $('ptsUsage').innerHTML='<span class="hint">用量加载失败：'+escHtml(e.message)+'</span>'; });
   }
-  $('ptsRefresh').addEventListener('click', function(){ loadPoints(); loadUsage(); });
+  $('ptsRefresh').addEventListener('click', function(){ loadPoints(); loadUsage(1); });
   $('ptsSign').addEventListener('click', function(){
     if(!confirm('确认领取今天的积分？这会向 TeleAgent 官方发起签到领取。')) return;
     var btn=$('ptsSign'); btn.disabled=true; btn.textContent='领取中…';
