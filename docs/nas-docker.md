@@ -17,7 +17,8 @@ NAS Docker
 
 **完整性链**：镜像内的 kernel / ais / node / python / ripgrep 全部来自官方 deb 包内的
 Linux runtime 压缩档（逐字节 sha256 与 deb 清单一致），清单固化在
-`docker/payload-manifest.txt`；python 包 111MB 超过 GitHub 单文件限制，所以载荷挂在仓库
+`docker/payload-manifest.txt`（x64）与 `docker/payload-manifest-arm64.txt`（arm64）；
+python 包超过 GitHub 单文件限制（x64 111MB / arm64 81MB），所以两套载荷都挂在仓库
 Release（tag `payload-3.1.0-dev-20261116`），**构建时下载并 sha256 校验**，校验不过构建直接失败。
 
 ---
@@ -27,7 +28,7 @@ Release（tag `payload-3.1.0-dev-20261116`），**构建时下载并 sha256 校�
 | 项 | 要求 |
 | --- | --- |
 | PC | Windows，TeleAgent 桌面端**已登录**（导出与 DPAPI 解密都在 PC 上完成） |
-| NAS | 有 Docker（fnOS：应用中心装 Docker / Compose）；能访问 GitHub（拉 GHCR 镜像、构建时下载 Release 载荷） |
+| NAS | 有 Docker（fnOS：应用中心装 Docker / Compose）；能访问 GitHub（拉 GHCR 镜像、构建时下载 Release 载荷）。CPU 架构不限：**x86_64 与 ARM64（aarch64）均原生支持**（见第 9 节） |
 | Node | PC 上要有 Node ≥ 20（跑导出工具；桌面端用户一般已有） |
 | 网络 | NAS 与 PC 能访问 `agent-pre.teleai.com.cn`（登录/续期）与模型流量网关 |
 
@@ -192,10 +193,56 @@ docker compose -f docker/docker-compose.yml build
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-构建脚本自动从 GitHub Release 下载 5 个官方载荷并按 `docker/payload-manifest.txt` 校验
-sha256，任何字节不符都会中止构建。
+构建脚本自动从 GitHub Release 下载 5 个官方载荷并按架构对应清单
+（`payload-manifest.txt` / `payload-manifest-arm64.txt`）校验 sha256，任何字节不符都会
+中止构建。**载荷架构自动跟随构建机 CPU**（x86_64 → x64 载荷，ARM64 → arm64 载荷），
+无需任何参数；仅当构建器不注入 `TARGETARCH` 报「不支持的载荷架构」时，才在 `.env` 里
+设 `TA_PAYLOAD_ARCH=x64` 或 `arm64` 显式指定。
 
-## 9. 排错速查
+## 9. ARM64 NAS（飞牛 fnOS ARM 版等）
+
+镜像从 v0.7.2 起提供**多架构清单**（multi-arch manifest）：`ghcr.io/ghg6666678/ta2api:latest`
+同时携带 `linux/amd64` 与 `linux/arm64` 两套层，Docker 拉取时**自动选本机架构**——ARM64
+NAS 上 `docker compose pull` / `up -d` 与 x86_64 完全同一条命令，没有平台仿真、没有转译。
+
+为什么可以原生跑（都已逐一验证）：
+
+- **kernel（`TeleAgent`）/ `ais`**：静态链接 Go 二进制（ELF aarch64，`e_machine=0xB7`），
+  无动态依赖；arm64 deb 内的版本串 `3.1.0-dev-3-1-0-20261116095753` 与 PC 桌面端
+  **逐字符相同**，版本对齐。
+- **node 24.18.0 / python 3.12.13**：官方 arm64 构建，解包结构
+  （`node-v24.18.0-linux-arm64/`、`python/bin/python3.12`）与 x64 完全同构。
+- **ripgrep**：arm64 deb 自带 `ripgrep/linux-arm64/rg`（aarch64 ELF）。
+- **代理本体（server.mjs / lib）**：纯 Node.js，无架构分支；登录/续期代码不涉及任何
+  架构假设。
+
+部署与验证（在 ARM64 NAS 上）：
+
+```bash
+# 1) 部署：与 x86_64 完全一致（compose 会自动拉 arm64 层）
+cp docker/.env.example .env && vim .env      # 填 TA_DATA_ROOT / TA_CRYPT_KEY / TA_API_KEY
+docker compose -f docker/docker-compose.yml up -d
+
+# 2) 确认拉到的是 arm64 层（Optional 字样 = 多架构清单工作正常）
+docker image inspect ghcr.io/ghg6666678/ta2api:latest --format '{{.Architecture}}'   # → arm64
+docker manifest inspect ghcr.io/ghg6666678/ta2api:latest
+
+# 3) 确认 kernel 真的是 aarch64（进制头 B7 = arm64）
+docker exec ta2api-gateway sh -c 'head -c 20 /data/runtimes/super-agent-code/bin/TeleAgent | od -An -tx1 | head -1'
+#    → 7f 45 4c 46 02 01 01 00 ... ... b7 00   （b7=183=aarch64）
+
+# 4) 常规验证：模型列表 + 一次对话 + renew 状态（同第 5 节）
+curl -s http://127.0.0.1:8787/v1/models -H "Authorization: Bearer $TA_API_KEY"
+docker exec ta2api-renew node tools/renew-credentials.mjs status
+```
+
+ARM64 上唯一的注意点：**全量导出包**（含 PC 的 Windows runtimes）挂进数据根时，
+entrypoint 对已存在的实体目录**不覆盖**，Windows 的 `node.exe` 等不会被用到——容器内
+一切可执行文件都来自镜像内置的 Linux arm64 runtimes（`/data/runtimes` 下的软链指向
+`/opt/runtimes`）。如果你删了数据根里的 `runtimes/` 实体目录让软链生效，行为与 x86_64
+部署完全一致。
+
+## 10. 排错速查
 
 | 症状 | 处理 |
 | --- | --- |
@@ -209,14 +256,15 @@ sha256，任何字节不符都会中止构建。
 | 端口被占 | compose 里改 `TA_PORT` |
 | 想看请求/内核日志 | `docker logs ta2api-gateway`；内核日志在数据根 `logs*/` 与 `runtime/` 下 |
 
-## 10. 升级
+## 11. 升级
 
 ```bash
 docker compose -f docker/docker-compose.yml pull   # GHCR 镜像更新
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-runtime 载荷升级 = 官方 deb 换版 → 新 Release tag → 更新 `docker/payload-manifest.txt`
-与 `docker/runtimes.version.json` → 重新构建/发布镜像（仓库的 GitHub Actions 在 push 到
-main 时自动构建并发布 `ghcr.io/ghg6666678/ta2api:{latest,<sha>}`）。
+runtime 载荷升级 = 官方 deb 换版 → 新 Release tag（x64/arm64 两套资产）→ 更新
+`docker/payload-manifest{,-arm64}.txt` 与 `docker/runtimes.version{,.arm64}.json`
+→ 重新构建/发布镜像（仓库的 GitHub Actions 在 push 到 main 时自动构建 amd64+arm64
+双架构清单并发布 `ghcr.io/ghg6666678/ta2api:{latest,<sha>}`）。
 凭据数据根与镜像版本无关，升级镜像**不需要**重新导出凭据。

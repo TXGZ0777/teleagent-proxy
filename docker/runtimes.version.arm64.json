@@ -1,0 +1,15 @@
+{
+  "superAgentCode": "3.1.0-dev-3-1-0-20261116095753",
+  "superAgentCodeFile": "super-agent-code-linux-arm64.tar.gz",
+  "superAgentCodeHash": "71cb5e447de63afe407542228e4d1a68a704bba981bdcf3f283351c0f21fe146",
+  "superagentChecksum": "558145043f8b70169c01a823c7a355d48de0fffe90f76f791d9eee40935fff6b",
+  "ais": "0.0.0-dev-3-1-0-20261113150355",
+  "aisFile": "teleagent-ais-linux-arm64.tar.gz",
+  "aisChecksum": "6e5b41f09b69e682e2ffca91ae97448543fdbab17d57f770bf6824f64554e11d",
+  "python": "3.12.13",
+  "pythonFile": "python-linux-arm64.tar.gz",
+  "pythonChecksum": "b14d074c43fdf03f01822fd07a15b3039eb0558503d1cb791791602cbe32908b",
+  "node": "24.18.0",
+  "nodeFile": "node-linux-arm64.tar.gz",
+  "nodeChecksum": "6b4484c2190274175df9aa8f28e2d758a819cb1c1fe6ab481e2f95b463ab8508"
+}

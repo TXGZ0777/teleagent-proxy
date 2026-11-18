@@ -6,14 +6,20 @@
 #
 # 镜像两种来源：
 #   1) GHCR 拉取（默认）：image: ghcr.io/ghg6666678/ta2api:latest
+#      （多架构清单：x86_64 与 ARM64 NAS 均直接拉到本机架构的层）
 #   2) 本地构建：docker compose -f docker/docker-compose.yml build
-#      （构建时自动从 GitHub Release 下载官方 runtime 载荷并校验 sha256）
+#      （构建时自动从 GitHub Release 下载官方 runtime 载荷并校验 sha256；
+#       载荷架构自动跟随构建机 CPU——x86_64 装载 x64、ARM64 装载 arm64）
 services:
   gateway:
     image: ghcr.io/ghg6666678/ta2api:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        # 留空即可（BuildKit 自动注入 TARGETARCH）；仅当构建器不注入
+        # TARGETARCH 且报「不支持的载荷架构」时才显式设为 x64 / arm64
+        PAYLOAD_ARCH: "${TA_PAYLOAD_ARCH:-}"
     container_name: ta2api-gateway
     restart: unless-stopped
     init: true

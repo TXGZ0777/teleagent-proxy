@@ -104,13 +104,14 @@ node server.mjs
 端点统一是 `http://127.0.0.1:8787/v1`。OpenAI SDK / WorkBuddy 等图形客户端 / DSH /
 Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.md](docs/CLIENTS.md)**。
 
-## NAS / Docker 部署（0.7.0 起）
+## NAS / Docker 部署（0.7.0 起，0.7.2 起支持 ARM64）
 
 不想让 PC 常驻？Linux 镜像（内核/ais/node/python 均为官方 deb 原包，构建时 sha256 校验）
 + 凭据导出工具 + 续期守护已经就位：PC 跑一次
 `node tools/export-credentials.mjs`，NAS 上 `docker compose up -d` 即可，
 续期由容器自动完成（**首次续期后 PC 桌面端需重新登录一次**，详见文档第 6 节）。
-完整步骤见 **[docs/nas-docker.md](docs/nas-docker.md)**。
+GHCR 镜像为**多架构清单**（amd64 + arm64），ARM64 NAS（ARM 版 fnOS 等）同样一条
+`docker compose up -d`。完整步骤见 **[docs/nas-docker.md](docs/nas-docker.md)**。
 
 ## 稳定性（0.4.1 起）
 
@@ -138,7 +139,7 @@ Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.
 
 ## 版本
 
-当前版本 **0.7.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.7.2**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 

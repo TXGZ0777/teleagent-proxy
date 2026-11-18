@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.7.2] - 2026-11-19
+
+### Added
+
+- **ARM64（aarch64）原生支持**——ARM 版飞牛 fnOS、树莓派等 ARM64 NAS 无需仿真直接跑：
+  - 官方同版 arm64 deb（kernel `3.1.0-dev-3-1-0-20261116095753`，与 PC/x64 **逐字符相同**）
+    提取的 5 个 linux-arm64 载荷上传至同一 Release（tag `payload-3.1.0-dev-20261116`），
+    清单固化在 `docker/payload-manifest-arm64.txt`（deb 内嵌 sha256 逐字节一致，二进制
+    ELF 机器型逐一验证为 aarch64）；
+  - `docker/Dockerfile` 新增 `PAYLOAD_ARCH` 构建参数（`x64` / `arm64`），默认跟随 buildx
+    的 `TARGETARCH` 自动选择（`amd64` 归一为 `x64`）；x64 链路全部字符串逐字节不变；
+  - `docker/runtimes.version.arm64.json`：arm64 载荷版本指纹（与 deb 原件逐字节一致）；
+  - `docker-compose.yml` / `.env.example`：可选 `TA_PAYLOAD_ARCH` 透传（一般留空）。
+
+### Changed
+
+- CI（`.github/workflows/docker-image.yml`）：`linux/amd64` 单架构 → `linux/amd64,linux/arm64`
+  多架构清单构建（QEMU 仿真 arm64 RUN 层的 shell/解包操作，无编译），GHCR 的
+  `ta2api:{latest,<sha>}` 变为双架构镜像，拉取端按 CPU 自动选层；
+- `docker/entrypoint.sh` 无需改动（本来就是 find 定位 node 目录、目录名泛化，架构无关）；
+- `docs/nas-docker.md`：新增「9. ARM64 NAS」章节（部署/验证命令、多架构清单检查、
+   ELF 头确认），本地构建/升级章节同步双架构表述。
+
+## [0.7.1] - 2026-11-18
+
+### Added
+
+- **自动首续交接（`TA_RENEW_AUTO_HANDOVER`，默认开）**：凭据导入后 renew 第一次检查发现
+  本实例从未成功续期过时，自动 force 续期一次接管会话链——不看 >21 天余量，部署当天
+  完成交接；失败留痕 `handoverBlocked`（`status` 三态：待执行 / 已完成 / 已尝试但终态失败），
+  不再重复重试。`.env` 设 `0` 关闭＝被动备份模式（NAS 不主动轮换，PC 桌面端不受影响）。
+- **浏览器登录 token 导入 `tools/import-login-token.mjs`**：在任何浏览器（手机也行）完成
+  官方登录，等地址栏出现 `…/cowork/auth?code=…&token=…` 时复制整个 URL 粘给容器，即可
+  换一条全新独立会话（不动 PC、不清数据根）——用于 90 天绝对期限到期 / 会话已死 /
+  不想打扰 PC 的场景。
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

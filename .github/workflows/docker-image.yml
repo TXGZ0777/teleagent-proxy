@@ -1,10 +1,14 @@
 # 构建 TA2API Linux 运行时镜像并发布到 GHCR
 #
 # 前置条件：payload（官方 runtime 压缩包）必须已挂在仓库 Release
-#   tag: payload-3.1.0-dev-20261116（Dockerfile 构建时按 docker/payload-manifest.txt 下载并校验 sha256）
+#   tag: payload-3.1.0-dev-20261116
+#   （Dockerfile 构建时按 docker/payload-manifest{,-arm64}.txt 下载并逐文件校验 sha256）
 #
 # 触发：推送 main / 手动 workflow_dispatch
 # 产物：ghcr.io/ghg6666678/ta2api:{latest, <sha>}
+#   单一多架构 manifest：linux/amd64 + linux/arm64（fnOS 等 ARM64 NAS 原生可用）
+#   构建期载荷架构由 buildx 自动注入的 TARGETARCH 决定（amd64→x64 / arm64→arm64），
+#   arm64 的 RUN 层经 QEMU 仿真执行（仅 shell/解包操作，无编译，开销可接受）。
 name: docker-image
 
 on:
@@ -27,6 +31,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # arm64 层的 RUN（apt/curl/tar/软链）需要 binfmt 仿真；amd64 层原生执行不受影响
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -46,12 +56,12 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
-      - name: Build and push
+      - name: Build and push (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
