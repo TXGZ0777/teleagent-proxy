@@ -13,10 +13,17 @@
 //   TA_OS_TYPE           默认 Windows（对齐签发设备；留空发桌面端原值）
 //   TA_APP_VERSION       默认从导出包 ta-export-meta.json / runtimes/.version.json 取
 //   TA_BG_ENV            有值才附加 teleagent 路由头（桌面端 BG_ENV 语义）
+//   TA_RENEW_AUTO_HANDOVER  默认 1（开启自动首续）；=0 关闭（被动备份模式，不踢 PC）
+//
+// 首次交接（默认开启）：凭据导入后，本实例首次检查发现「从未成功续期过」（无
+//   renewal-state.json 成功痕迹）时，自动强制续期一次接管会话链（语义见 lib/renew.mjs
+//   头注释），部署当天就完成交接、不给 PC 桌面端在 >21 天空窗期抢先轮换的机会。
+//   需要换一条**全新独立会话**且不踢 PC 下线时，用 tools/import-login-token.mjs：
+//   在任意浏览器完成官方登录（/cowork/auth），把跳转 URL 粘给该工具导入即可。
 //
 // 退出码（once）：0 成功或未到期跳过；1 瞬时失败（可重试）；2 终态失败（需重新导出凭据）。
 import process from 'node:process';
-import { renewCredential, credentialStatus, shouldRenewNow } from '../lib/renew.mjs';
+import { renewCredential, credentialStatus, shouldRenewNow, autoHandoverDefault } from '../lib/renew.mjs';
 
 const argv = process.argv.slice(2);
 const cmd = argv[0] && !argv[0].startsWith('-') ? argv[0] : 'status';
@@ -40,6 +47,11 @@ async function main() {
     log.info(`绝对期限 (abs) : ${s.absoluteExpiresAt ?? '-'}（剩余 ${s.absoluteDaysLeft?.toFixed(1) ?? '?'} 天）`);
     log.info(`generation     : ${s.generation ?? '-'}`);
     log.info(`今日已尝试     : ${s.attemptedToday ? '是' : '否'}${s.lastSuccessAt ? `（上次成功 ${s.lastSuccessAt}）` : ''}`);
+    log.info(`自动首续       : ${autoHandoverDefault() ? '开' : '关'}（TA_RENEW_AUTO_HANDOVER）`);
+    log.info(`首次交接       : ${s.handoverBlocked
+      ? `已尝试但终态失败（${s.handoverBlockedCategory}），不再自动重试；请重新导出或用 tools/import-login-token.mjs 导入浏览器登录`
+      : s.lastSuccessAt ? '已完成' : '待执行（本实例尚未成功续期过，下次检查会自动 force）'}`);
+    if (s.lastFailureAt) log.info(`上次失败       : ${s.lastFailureAt}（${s.lastFailureCategory}${s.lastFailureTerminal ? '，终态' : ''}）`);
     log.info(`token 文件     : ${s.tokenFile}`);
     const v = shouldRenewNow(s, { force: flags.has('--force') });
     log.info(`续期判定       : ${v.due ? '到期' : '跳过'} — ${v.reason}`);

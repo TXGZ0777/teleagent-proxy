@@ -94,7 +94,8 @@ cp docker/.env.example .env
 | `TA_CRYPT_KEY` | ✅ | `crypt-key.b64` 的**内容**（一行 base64），不是文件路径 |
 | `TA_API_KEY` | 强烈建议 | 端点 Bearer 密钥；端口暴露在局域网时必须设置 |
 
-可选：`TA_PORT`（宿主映射端口，默认 8787）、`TA_OS_TYPE`（积分接口 OS 头覆盖）。
+可选：`TA_PORT`（宿主映射端口，默认 8787）、`TA_OS_TYPE`（积分接口 OS 头覆盖）、
+`TA_RENEW_AUTO_HANDOVER`（自动首续开关，默认开；设 0 = 被动备份模式，不踢 PC）。
 
 ## 4. 启动
 
@@ -136,28 +137,46 @@ Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:87
   会轮换当前会话凭据、旧 token 只有 60s 吊销宽限：NAS 用导出的 token 完成首次续期后，
   PC 桌面手里的旧 token 会失效并要求重新登录。重新登录产生的是**另一条**会话，
   与 NAS 互不干扰——登录完即可，**不需要**重新导出（NAS 继续用自己的那条会话）。
-- **为什么要在部署当天主动交接，而不是等自动首续**：导出包与 PC 桌面端是**同一条会话**
-  的副本，而 PC 桌面端只要开机就会按自己的节奏每天轮换一次——谁先轮换，另一方手里的
-  旧凭据就在 60s 宽限后作废。NAS 侧默认 token 剩余 >21 天不自动续（导出时通常还剩
-  ~30 天，空窗好几天），大概率被 PC 抢先。所以部署完立即执行一次
-  `docker exec ta2api-renew node tools/renew-credentials.mjs once --force`，
-  成功后再让 PC 重新登录，从此进入「两条独立会话」的稳态。
+- **★ 交接现在是全自动的（v0.7.1 起）**：凭据导入后，renew 第一次检查发现「本实例从未
+  成功续期过」（无 `renewal-state.json` 成功痕迹）时，会**自动 force 续期一次**接管会话链
+  ——不看 >21 天余量，部署当天就完成交接，不给 PC 桌面端在空窗期抢先轮换的机会。
+  `status` 里能看到三态：`待执行` / `已完成` / `已尝试但终态失败（…）不再自动重试`。
+  想关掉（把 NAS 当被动备份、完全不踢 PC）：`.env` 设 `TA_RENEW_AUTO_HANDOVER=0`
+  后重启 renew 容器；手动交接命令依旧可用（`once --force`）。
 - **如何确认「首次续期已完成」**（任选其一）：
   - `docker exec ta2api-renew node tools/renew-credentials.mjs status`：
     `generation` 从导出时的 1 变 **2**、`token 过期` 向后推了 ~30 天、
-    `今日已尝试 : 是（上次成功 <时间>）`；
+    `首次交接 : 已完成`；
   - `docker logs ta2api-renew` 出现 `[renew] 成功 ttl=…s generation=2 新过期=…`
     （只看到 `跳过 — token 还剩 N 天（>21 天余量）` 就是还没轮到）；
   - 数据根出现 `users/<owner>/app-auth/renewal-state.json`（含 `lastSuccessAt`）和
     `token.json.bak-*` 备份；PC 桌面端弹出重新登录是旁证（60s 宽限后）。
-- **如果 PC 桌面端抢先轮换了**：NAS 日志会出现终态失败 `session_not_found`——这不是
-  故障，是交接晚了。恢复：PC 重新登录 → 重新 `node tools/export-credentials.mjs`
-  → 整体替换 NAS 数据根 → 立刻 `once --force` 完成交接。
+- **如果 PC 桌面端抢先轮换了**：NAS 的首次交接会撞上终态失败 `session_not_found`，并记入
+  `handoverBlocked`（自动首续就此停手，`status` 显示「已尝试但终态失败」，日志只此一次）——
+  这不是故障，是交接晚了。恢复：PC 重新登录 → 重新 `node tools/export-credentials.mjs`
+  → 整体替换 NAS 数据根（交接痕迹随之清零，下次检查自动重新交接）；或走下面这条
+  完全绕开 PC 的路。
+- **★ 另一种续命方式：浏览器登录导入（不动 PC 会话，v0.7.1 起）**。取证确认：桌面端的
+  「登录」就是内嵌官方网页 `https://agent-pre.teleai.com.cn/cowork/auth`（客户端自己**不生成**
+  登录二维码），登录完成后网页跳转到 `…/cowork/auth?code=…&token=<JWT>`，桌面端从跳转
+  URL 里抓 token。所以在**任何浏览器**（手机也行）完成官方登录，等地址栏出现
+  `?code=…&token=…` 时复制整个 URL，粘给 NAS 容器即可换血：
+  ```bash
+  docker exec ta2api-renew node tools/import-login-token.mjs \
+    "https://agent-pre.teleai.com.cn/cowork/auth?code=…&token=…"
+  ```
+  这会导入一条**全新独立会话**（generation 归 1、90 天绝对期限重置、`renewal-state.json`
+  清零；旧 token 自动备份）——按会话模型，PC 桌面端自己的会话**不受影响、无需重新登录**。
+  适用场景：90 天绝对期限到头、导出包会话已死、或单纯不想打扰 PC。
+  两点注意：① 新会话由浏览器上下文签发，refresh 沿用导出包的 deviceId，服务端是否校验
+  「会话-设备绑定」未实测（与续期复刻同类风险），导入后跑一次 `once --force` 验证；
+  ② URL 必须含 `token=` 参数，只有 `code=` 说明跳转还没走完。
 - **会话寿命**：token 短期有效 + 90 天绝对期限。renew 日志出现「终态失败（会话已死）」
-  或 `SESSION_ABSOLUTE_EXPIRED` 时，续期链已死：到 PC 重新登录 TeleAgent，然后**重新跑**
-  `node tools/export-credentials.mjs` 并替换 NAS 上的数据根内容。
-- renew 失败但非终态（网络抖动等）会自动重试，无需干预；观察：
-  `docker logs -f ta2api-renew`。
+  或 `SESSION_ABSOLUTE_EXPIRED` 时，续期链已死：走上面的浏览器登录导入直接换新会话，
+  或到 PC 重新登录 TeleAgent 后重新导出并替换数据根。
+- renew 失败但非终态（网络抖动等）会自动重试，无需干预；失败也按「每日一次」留痕
+  （`renewal-state.json` 的 `lastFailureAt` / `lastFailureCategory`），当天不会重复空转。
+  观察：`docker logs -f ta2api-renew`。
 
 ## 7. 版本说明
 
@@ -184,7 +203,8 @@ sha256，任何字节不符都会中止构建。
 | `TA_CRYPT_KEY 非法：期望 32 字节` | `.env` 里填的是文件路径？应填 `crypt-key.b64` 的内容 |
 | `token.json 解密失败（TA_CRYPT_KEY 与该文件的主密钥不匹配？）` | 数据根与主密钥来自两次不同的导出；重新导出并整体替换 |
 | `/v1/models` 为空 | 数据根缺 `users/<账号>/model-catalog.json`，重新导出 |
-| renew 报 `终态失败` / `SESSION_ABSOLUTE_EXPIRED` | 见第 6 节：PC 重新登录 + 重新导出 |
+| renew 报 `终态失败` / `SESSION_ABSOLUTE_EXPIRED` | 见第 6 节：浏览器登录导入（`tools/import-login-token.mjs`）或 PC 重新登录 + 重新导出 |
+| `首次交接 : 已尝试但终态失败（session_not_found）` | 导出会话已被 PC 抢先轮换；按第 6 节恢复（重新导出替换，或浏览器登录导入） |
 | 积分接口 4xx/鉴权异常 | 尝试 `.env` 加 `TA_OS_TYPE=windows` 后重启 gateway |
 | 端口被占 | compose 里改 `TA_PORT` |
 | 想看请求/内核日志 | `docker logs ta2api-gateway`；内核日志在数据根 `logs*/` 与 `runtime/` 下 |

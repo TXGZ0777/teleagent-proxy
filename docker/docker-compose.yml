@@ -44,6 +44,8 @@ services:
       TA_DEVICE_DATA_ROOT: /data
       TA_CRYPT_KEY: "${TA_CRYPT_KEY:?请在 .env 中设置 TA_CRYPT_KEY}"
       TA_REFRESH_BASE_URL: "${TA_REFRESH_BASE_URL:-}"
+      # 自动首续（默认 1=开）：凭据导入后第一次检查自动 force 接管会话链；=0 关闭（被动备份，不踢 PC）
+      TA_RENEW_AUTO_HANDOVER: "${TA_RENEW_AUTO_HANDOVER:-1}"
     volumes:
       - "${TA_DATA_ROOT:?请在 .env 中设置 TA_DATA_ROOT}:/data"
     # 桌面端同款节奏：启动补偿 + 每 6h 检查，工具内部按「每日一次」去重
