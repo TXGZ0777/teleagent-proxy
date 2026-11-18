@@ -6,6 +6,12 @@ runtime-probe/
 # 本机密钥（网关 key）
 local.secrets.json
 
+# Docker 部署本机环境（含主密钥 TA_CRYPT_KEY）
+.env
+
+# 凭据导出产物（含主密钥，绝不进 git）
+ta-export/
+
 # 逆向抓下来的客户端片段（不随仓库分发）
 notes/
 

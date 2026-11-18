@@ -223,6 +223,8 @@ try {
     runtimeConfig,
     points: createPoints(),
     port: listenPort,
+    // Docker/NAS 部署用 TA_HOST=0.0.0.0；PC 默认不变（shim 默认 127.0.0.1）
+    host: process.env.TA_HOST || undefined,
     archiveDir: path.join(runtimeRoot, 'archive'),
   });
 } catch (err) {

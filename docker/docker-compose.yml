@@ -1,0 +1,50 @@
+# TA2API fnOS / Docker 部署：gateway（OpenAI 兼容端点）+ renew（凭据续期守护）
+#
+# 用法（在仓库根目录，或 docker/ 目录内把 context 调整为 ..）：
+#   cp docker/.env.example .env && 编辑 .env
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# 镜像两种来源：
+#   1) GHCR 拉取（默认）：image: ghcr.io/ghg6666678/ta2api:latest
+#   2) 本地构建：docker compose -f docker/docker-compose.yml build
+#      （构建时自动从 GitHub Release 下载官方 runtime 载荷并校验 sha256）
+services:
+  gateway:
+    image: ghcr.io/ghg6666678/ta2api:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ta2api-gateway
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${TA_PORT:-8787}:8787"
+    environment:
+      TA_DEVICE_DATA_ROOT: /data
+      TA_HOST: 0.0.0.0
+      TA_PORT: "8787"
+      # 必填：PC 导出的 32B 主密钥（base64），crypt-key.b64 的内容
+      TA_CRYPT_KEY: "${TA_CRYPT_KEY:?请在 .env 中设置 TA_CRYPT_KEY}"
+      # 建议必填：NAS 端口暴露在局域网，务必给端点加 Bearer
+      TA_API_KEY: "${TA_API_KEY:-}"
+      # 透传到容器内日志的调试开关（可选）
+      TA_REFRESH_BASE_URL: "${TA_REFRESH_BASE_URL:-}"
+    volumes:
+      # 必填：PC 导出的凭据数据根目录
+      - "${TA_DATA_ROOT:?请在 .env 中设置 TA_DATA_ROOT}:/data"
+
+  renew:
+    image: ghcr.io/ghg6666678/ta2api:latest
+    container_name: ta2api-renew
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - gateway
+    environment:
+      TA_DEVICE_DATA_ROOT: /data
+      TA_CRYPT_KEY: "${TA_CRYPT_KEY:?请在 .env 中设置 TA_CRYPT_KEY}"
+      TA_REFRESH_BASE_URL: "${TA_REFRESH_BASE_URL:-}"
+    volumes:
+      - "${TA_DATA_ROOT:?请在 .env 中设置 TA_DATA_ROOT}:/data"
+    # 桌面端同款节奏：启动补偿 + 每 6h 检查，工具内部按「每日一次」去重
+    command: ["node", "/app/tools/renew-credentials.mjs", "daemon"]

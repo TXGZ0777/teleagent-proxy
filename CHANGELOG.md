@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.7.0] - 2026-11-18
+
+### Added
+
+- **NAS / Docker 部署**（`docker/` + `docs/nas-docker.md`）：
+  - `docker/Dockerfile`：Debian slim 基座，内置官方 deb 的 Linux runtime（kernel / ais / node /
+    python / ripgrep），构建时从仓库 Release 下载载荷并按 `docker/payload-manifest.txt` 校验 sha256；
+  - `docker/docker-compose.yml`：gateway（OpenAI 兼容端点）+ renew（凭据续期守护）双角色共用镜像；
+  - `docker/entrypoint.sh`：把镜像内置 runtime 软链进数据根、缺凭据时给出可操作提示；
+  - `docker/.env.example`：`TA_DATA_ROOT` / `TA_CRYPT_KEY` / `TA_API_KEY` 模板。
+- **凭据导出工具 `tools/export-credentials.mjs`**（PC 跑一次）：DPAPI 解出 32B 主密钥
+  （`crypt-key.b64`）+ 组装 NAS 数据根最小文件集 + round-trip 校验（导出密钥必须能解开导出 token）。
+- **凭据续期 `lib/renew.mjs` + `tools/renew-credentials.mjs`**：复刻桌面端 token-refresh 协议
+  （`status` / `once [--dry-run|--force]` / `daemon`），桌面端同款节奏（启动补偿 + 每 6h 检查、
+  按日去重），token.json 落盘与桌面端同构（含备份与 0600 权限）。
+  注意：NAS 首次续期后 PC 桌面端需重新登录一次（会话按登录实例轮换，两端互不干扰）。
+
+### Changed
+
+- `lib/paths.mjs`：新增 `TA_DEVICE_DATA_ROOT`，NAS/容器部署可把数据根挂载到任意路径；
+- `lib/points.mjs`：本地凭据定位统一走 `paths.mjs`（原先硬编码 home 路径，容器里不可用）；
+  `X-OS-Type` 支持 `TA_OS_TYPE` 覆盖；
+- `lib/auth.mjs`：非 Windows 平台用 `TA_CRYPT_KEY`（PC 导出的主密钥 base64）替代 DPAPI，
+  `decryptV10` 纯 Node crypto 跨平台一致；
+- `server.mjs`：新增 `TA_HOST`（Docker 里 `0.0.0.0`，PC 默认仍是 `127.0.0.1`）。
+
 ## [0.6.4] - 2026-11-18
 
 ### Changed

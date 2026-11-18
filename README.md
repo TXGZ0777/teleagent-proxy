@@ -104,6 +104,14 @@ node server.mjs
 端点统一是 `http://127.0.0.1:8787/v1`。OpenAI SDK / WorkBuddy 等图形客户端 / DSH /
 Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.md](docs/CLIENTS.md)**。
 
+## NAS / Docker 部署（0.7.0 起）
+
+不想让 PC 常驻？Linux 镜像（内核/ais/node/python 均为官方 deb 原包，构建时 sha256 校验）
++ 凭据导出工具 + 续期守护已经就位：PC 跑一次
+`node tools/export-credentials.mjs`，NAS 上 `docker compose up -d` 即可，
+续期由容器自动完成（**首次续期后 PC 桌面端需重新登录一次**，详见文档第 6 节）。
+完整步骤见 **[docs/nas-docker.md](docs/nas-docker.md)**。
+
 ## 稳定性（0.4.1 起）
 
 长对话在代理或桌面端重启后可以**直接继续**，不再"必超时、要反复发请继续"：
@@ -122,6 +130,7 @@ Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.
 | 文档 | 内容 |
 |---|---|
 | [docs/CLIENTS.md](docs/CLIENTS.md) | 各客户端接入：OpenAI SDK、DSH、Codex CLI、CC Switch、curl |
+| [docs/nas-docker.md](docs/nas-docker.md) | NAS / Docker 部署：凭据导出、compose、续期守护与排错 |
 | [docs/RELIABILITY.md](docs/RELIABILITY.md) | 稳定性与上下文管理：裁剪、看门狗、熔断、内核池、排障速查 |
 | [docs/CONFIG.md](docs/CONFIG.md) | 全部环境变量、上游 gateway key 获取、提示词优先级与自检 |
 | [docs/ADMIN.md](docs/ADMIN.md) | Web 管理台：密钥管理、鉴权模式、流水 |
@@ -129,12 +138,13 @@ Codex CLI / Claude Code（CC Switch）/ curl 的具体配置见 **[docs/CLIENTS.
 
 ## 版本
 
-当前版本 **0.4.1**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.7.0**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 
-- 只监听 `127.0.0.1`；在管理台新建密钥（或设 `TA_API_KEY`）即可要求鉴权，
-  避免同机其他程序白嫖你的额度
+- PC 版只监听 `127.0.0.1`；在管理台新建密钥（或设 `TA_API_KEY`）即可要求鉴权，
+  避免同机其他程序白嫖你的额度。Docker/NAS 版监听 `0.0.0.0`（容器语义），
+  **务必设置 `TA_API_KEY`** 再把端口暴露给局域网
 - 管理台仅回环可访问，但仍不建议把 8787 端口通过内网穿透/反代暴露出去
 - 登录态只在进程内存中出现；含 token 的临时 payload 在 kernel 就绪后立即删除
 - 这是**自用**工具：不要对外暴露、不要分发账号额度、不要用于绕过计费。
