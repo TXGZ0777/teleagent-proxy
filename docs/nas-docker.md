@@ -136,6 +136,23 @@ Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:87
   会轮换当前会话凭据、旧 token 只有 60s 吊销宽限：NAS 用导出的 token 完成首次续期后，
   PC 桌面手里的旧 token 会失效并要求重新登录。重新登录产生的是**另一条**会话，
   与 NAS 互不干扰——登录完即可，**不需要**重新导出（NAS 继续用自己的那条会话）。
+- **为什么要在部署当天主动交接，而不是等自动首续**：导出包与 PC 桌面端是**同一条会话**
+  的副本，而 PC 桌面端只要开机就会按自己的节奏每天轮换一次——谁先轮换，另一方手里的
+  旧凭据就在 60s 宽限后作废。NAS 侧默认 token 剩余 >21 天不自动续（导出时通常还剩
+  ~30 天，空窗好几天），大概率被 PC 抢先。所以部署完立即执行一次
+  `docker exec ta2api-renew node tools/renew-credentials.mjs once --force`，
+  成功后再让 PC 重新登录，从此进入「两条独立会话」的稳态。
+- **如何确认「首次续期已完成」**（任选其一）：
+  - `docker exec ta2api-renew node tools/renew-credentials.mjs status`：
+    `generation` 从导出时的 1 变 **2**、`token 过期` 向后推了 ~30 天、
+    `今日已尝试 : 是（上次成功 <时间>）`；
+  - `docker logs ta2api-renew` 出现 `[renew] 成功 ttl=…s generation=2 新过期=…`
+    （只看到 `跳过 — token 还剩 N 天（>21 天余量）` 就是还没轮到）；
+  - 数据根出现 `users/<owner>/app-auth/renewal-state.json`（含 `lastSuccessAt`）和
+    `token.json.bak-*` 备份；PC 桌面端弹出重新登录是旁证（60s 宽限后）。
+- **如果 PC 桌面端抢先轮换了**：NAS 日志会出现终态失败 `session_not_found`——这不是
+  故障，是交接晚了。恢复：PC 重新登录 → 重新 `node tools/export-credentials.mjs`
+  → 整体替换 NAS 数据根 → 立刻 `once --force` 完成交接。
 - **会话寿命**：token 短期有效 + 90 天绝对期限。renew 日志出现「终态失败（会话已死）」
   或 `SESSION_ABSOLUTE_EXPIRED` 时，续期链已死：到 PC 重新登录 TeleAgent，然后**重新跑**
   `node tools/export-credentials.mjs` 并替换 NAS 上的数据根内容。
