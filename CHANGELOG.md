@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.3] - 2026-11-19
+
+### Fixed
+
+- **更正浏览器登录导入的登录机制表述**（`docs/nas-docker.md` 第 6 节、
+  `tools/import-login-token.mjs`、`tools/renew-credentials.mjs`）：取证复核桌面端 bundle
+  的 `LOGIN_CONFIG`（main-runtime-a.js:120176-120186）确认——登录 UI 是**独立登录 Web App**
+  `/meter/teleagent-login/login`（bundle 原注释「Desktop 和 Web 登录壳都只 iframe 此地址」），
+  登录成功的回执 URL 是 `/superCowork/sapi/cowork/auth?code=…&token=…`；旧文档给的根路径
+  `https://agent-pre.teleai.com.cn/cowork/auth` 从不是登录入口（真实路径带 `/superCowork/sapi`
+  前缀），任何浏览器裸开都打不开，此前按旧文档操作必然失败。工具本身无需改动（只从 query
+  抠 `token=`，域名/路径不限），本次仅修正文档与提示文案：浏览器导入以登录 Web App 为入口。
+
 ## [0.7.2] - 2026-11-19
 
 ### Added

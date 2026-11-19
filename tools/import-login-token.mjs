@@ -1,14 +1,16 @@
 // TeleAgent 浏览器登录 token 导入（Linux/Windows 通用；凭据格式与桌面端同构）
 //
-// 背景（取证 .temp/main-runtime-a.js）：
-//   - 桌面端的「登录」就是内嵌官方网页 LOGIN_PAGE = ${SERVER_URL}/cowork/auth
-//     （main-runtime-a.js:120181），桌面客户端自己**不生成**任何登录二维码；
-//   - 登录完成后网页跳转到 /cowork/auth?code=…&token=<JWT>，主进程从跳转 URL 的
-//     query 里抓 token 直接采纳（armLoginFlow，main-runtime-a.js:196785-196820）。
+// 背景（取证 .temp/main-runtime-a.js，LOGIN_CONFIG :120176-120186）：
+//   - 桌面端的「登录」是 iframe 独立登录 Web App：APP_PAGE = /meter/teleagent-login/login
+//     （bundle 原注释「Desktop 和 Web 登录壳都只 iframe 此地址」），桌面客户端自己
+//     **不生成**任何登录二维码；
+//   - 登录完成后跳到的是**回执页** LOGIN_PAGE = ${SERVER_URL}/cowork/auth，SERVER_URL（:620）
+//     = /superCowork/sapi，真实回执 URL 即 /superCowork/sapi/cowork/auth?code=…&token=<JWT>；
+//     主进程从跳转 URL 的 query 里抓 token 直接采纳（armLoginFlow，:196785-196820）。
 //
 //   因此官方登录（含网页上提供的短信/扫码等方式）本来就能在**任何浏览器**里完成：
-//   在浏览器登录成功、地址栏变成 /cowork/auth?code=…&token=… 时，把整个 URL 复制
-//   下来喂给本工具，就等于把这条**全新独立会话**装进 NAS 数据根。
+//   浏览器打开登录 Web App，登录成功、地址栏变成 /superCowork/sapi/cowork/auth?code=…&token=…
+//   时，把整个 URL 复制下来喂给本工具，就等于把这条**全新独立会话**装进 NAS 数据根。
 //
 //   入口可用性：pre 域的登录 App 与 API 网关是独立部署的两套服务，登录页可能单独故障
 //   （2026-11-19 实测：pre 登录页响应超时打不开，桌面端/续期走的 API 正常）。此时改用
@@ -75,10 +77,10 @@ async function main() {
   const jwt = extractToken(raw);
   if (!jwt) {
     log.warn(`!! 没有从输入里找到 token 参数。`);
-    log.warn('   正确姿势：在浏览器完成官方登录（登录页 https://agent-pre.teleai.com.cn/cowork/auth），');
-    log.warn('   等地址栏变成 /cowork/auth?code=…&token=… 后，把**整个 URL** 用引号包好粘进来：');
-    log.warn('     node tools/import-login-token.mjs "https://agent-pre.teleai.com.cn/cowork/auth?code=…&token=…"');
-    log.warn('   如果 URL 里只有 code= 没有 token=，说明登录还没走完跳转，等页面最终跳转后再复制。');
+    log.warn('   正确姿势：浏览器打开登录 Web App https://agent-pre.teleai.com.cn/meter/teleagent-login/login，');
+    log.warn('   登录成功后等地址栏出现 code=…&token=…，把**整个 URL** 用引号包好粘进来：');
+    log.warn('     node tools/import-login-token.mjs "https://agent-pre.teleai.com.cn/superCowork/sapi/cowork/auth?code=…&token=…"');
+    log.warn('   （域名不限，只要 query 里有 token=；只有 code= 没有 token= 说明跳转还没走完，等最终跳转后再复制。）');
     process.exitCode = 1;
     return;
   }

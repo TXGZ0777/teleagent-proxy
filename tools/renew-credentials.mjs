@@ -19,7 +19,8 @@
 //   renewal-state.json 成功痕迹）时，自动强制续期一次接管会话链（语义见 lib/renew.mjs
 //   头注释），部署当天就完成交接、不给 PC 桌面端在 >21 天空窗期抢先轮换的机会。
 //   需要换一条**全新独立会话**且不踢 PC 下线时，用 tools/import-login-token.mjs：
-//   在任意浏览器完成官方登录（/cowork/auth），把跳转 URL 粘给该工具导入即可。
+//   浏览器打开登录 Web App（https://agent-pre.teleai.com.cn/meter/teleagent-login/login）
+//   完成登录，把带 token= 的跳转 URL 粘给该工具导入即可。
 //
 // 退出码（once）：0 成功或未到期跳过；1 瞬时失败（可重试）；2 终态失败（需重新导出凭据）。
 import process from 'node:process';
