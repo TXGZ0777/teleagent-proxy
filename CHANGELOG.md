@@ -12,6 +12,12 @@
   `https://agent-pre.teleai.com.cn/cowork/auth` 从不是登录入口（真实路径带 `/superCowork/sapi`
   前缀），任何浏览器裸开都打不开，此前按旧文档操作必然失败。工具本身无需改动（只从 query
   抠 `token=`，域名/路径不限），本次仅修正文档与提示文案：浏览器导入以登录 Web App 为入口。
+  
+- **补充登录入口的可用性说明与生产域名回退路径**（同上三处文件）：实测确认 pre 域的登录 App
+  与 API 网关**独立部署**——pre 登录页单独故障（浏览器报「响应超时」）时，桌面端/NAS 续期
+  走的 `/superCowork/sapi` API 不受影响。文档与工具提示补上生产域名同款登录 App 作为回退
+  入口；prod 签发会话 × pre 刷新基址的兼容性未实测，以导入后 `once --force` 验证为准，
+  失败则用 `TA_REFRESH_BASE_URL` 切 prod 基址。
 
 ## [0.7.2] - 2026-11-19
 
