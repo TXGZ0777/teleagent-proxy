@@ -81,6 +81,8 @@ async function main() {
     log.warn('   登录成功后等地址栏出现 code=…&token=…，把**整个 URL** 用引号包好粘进来：');
     log.warn('     node tools/import-login-token.mjs "https://agent-pre.teleai.com.cn/superCowork/sapi/cowork/auth?code=…&token=…"');
     log.warn('   （域名不限，只要 query 里有 token=；只有 code= 没有 token= 说明跳转还没走完，等最终跳转后再复制。）');
+    log.warn('   （pre 登录页若一直「响应超时」打不开——登录 App 与 API 网关独立部署——换生产域名');
+    log.warn('     同款 agent.teleai.com.cn/meter/teleagent-login/login，回执 URL 是该域 /superCowork/sapi/cowork/auth?…，本工具不挑域名。）');
     process.exitCode = 1;
     return;
   }
