@@ -169,15 +169,25 @@ Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:87
   这会导入一条**全新独立会话**（generation 归 1、90 天绝对期限重置、`renewal-state.json`
   清零；旧 token 自动备份）——按会话模型，PC 桌面端自己的会话**不受影响、无需重新登录**。
   适用场景：90 天绝对期限到头、导出包会话已死、或单纯不想打扰 PC。
-  两点注意：① 新会话由浏览器上下文签发，refresh 沿用导出包的 deviceId，服务端是否校验
+  
+  **三点注意：**
+  
+  ① 新会话由浏览器上下文签发，refresh 沿用导出包的 deviceId，服务端是否校验
   「会话-设备绑定」未实测（与续期复刻同类风险），导入后跑一次 `once --force` 验证；
+  
   ② URL 必须含 `token=` 参数，只有 `code=` 说明跳转还没走完。
-- **会话寿命**：token 短期有效 + 90 天绝对期限。renew 日志出现「终态失败（会话已死）」
-  或 `SESSION_ABSOLUTE_EXPIRED` 时，续期链已死：走上面的浏览器登录导入直接换新会话，
-  或到 PC 重新登录 TeleAgent 后重新导出并替换数据根。
-- renew 失败但非终态（网络抖动等）会自动重试，无需干预；失败也按「每日一次」留痕
-  （`renewal-state.json` 的 `lastFailureAt` / `lastFailureCategory`），当天不会重复空转。
-  观察：`docker logs -f ta2api-renew`。
+  
+  ③ **入口可用性（2026-11-19 实测）**：pre 域的登录 App 与 API 网关是**独立部署**的两套服务，
+    pre 登录页可能单独故障（实测浏览器报「响应超时」，桌面端/NAS 续期走的 `/superCowork/sapi`
+    API 不受影响）。此时改用**生产域名同款登录 App**（官网「在线使用」按钮指向的就是它）：
+    `https://agent.teleai.com.cn/meter/teleagent-login/login`，登录后的回执 URL 相应变成
+    `https://agent.teleai.com.cn/superCowork/sapi/cowork/auth?code=…&token=…`——工具不挑域名
+    照常导入。**prod 签发的会话用 pre 刷新基址是否可行未实测**：导入后跑 `once --force` 验证；
+    若报会话不存在/校验失败，在 `.env` 加一行
+    `TA_REFRESH_BASE_URL=https://agent.teleai.com.cn/superCowork/sapi` 并重建容器
+    （`docker compose up -d`），整条续期链即自洽在 prod 环境（deviceId 沿用导出包，
+    同属①的未实测项）。另：登录时若被「弹回」（浏览器里已有 web 会话），拿到的回执可能
+    对应既有 web 会话而非全新会话——想稳妥拿全新会话，先在该页退出登录再重新登录。
 
 ## 7. 版本说明
 
