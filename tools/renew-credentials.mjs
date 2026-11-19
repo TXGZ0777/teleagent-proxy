@@ -20,7 +20,9 @@
 //   头注释），部署当天就完成交接、不给 PC 桌面端在 >21 天空窗期抢先轮换的机会。
 //   需要换一条**全新独立会话**且不踢 PC 下线时，用 tools/import-login-token.mjs：
 //   浏览器打开登录 Web App（https://agent-pre.teleai.com.cn/meter/teleagent-login/login）
-//   完成登录，把带 token= 的跳转 URL 粘给该工具导入即可。
+//   完成登录，把带 token= 的跳转 URL 粘给该工具导入即可。pre 登录页若超时打不开（登录 App
+//   与 API 网关独立部署、可单独故障），换生产域名同款 agent.teleai.com.cn/meter/teleagent-login/login
+//   （工具不挑域名）；prod 签发会话 × pre 刷新基址未实测，导入后 once --force 验证。
 //
 // 退出码（once）：0 成功或未到期跳过；1 瞬时失败（可重试）；2 终态失败（需重新导出凭据）。
 import process from 'node:process';
