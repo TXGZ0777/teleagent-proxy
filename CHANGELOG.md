@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.4] - 2026-11-19
+
+### Added
+
+- **管理台「会话 / 登录」面板**：NAS 上换会话/续期不再需要 `docker exec`。凭据状态一目了然
+  （剩余有效期 / 90 天绝对期限 / generation / 上次成功续期 / 交接阻断标记），粘贴浏览器登录
+  回执 URL 即可导入新会话（自动备份旧 token、generation 归 1，可先「仅校验预览」，可勾选
+  「导入后立即续期验证」），一键手动续期；登录入口链接跟随当前刷新基址域名自动生成。后端
+  核心从 `tools/import-login-token.mjs` 抽出为 `lib/session-import.mjs`（CLI 与管理台同源
+  逻辑），新增 `GET /admin/api/session`、`POST /admin/api/session/import`、
+  `POST /admin/api/session/renew` 三个管理接口，全部处于既有管理台访问限制与令牌校验之下。
+- **Docker 端强制鉴权（`TA_REQUIRE_AUTH=1`，compose 固定开启）**：未带有效 API 密钥的
+  `/v1` 调用一律 401——即使密钥表为空或管理台设为「自动/关闭」也生效；密钥表为空时 401
+  文案直接指引到管理台建密钥。PC 本机默认行为不变。
+
+### Fixed
+
+- **Docker 部署下管理台 `/admin` 实际不可达**：管理接口此前只放行容器内回环，按文档访问
+  `http://NAS_IP:8787/admin` 一律 403。新增 `TA_ADMIN_ALLOW_REMOTE=1`（compose 默认开启）
+  放行局域网访问，**前提**是已设置 `TA_ADMIN_TOKEN`——「放行远程但无令牌」自动退回仅回环
+  并打启动警告（管理台能改密钥、导入凭据，裸奔远程是危险组合）。
+
+### Changed
+
+- `docker/.env.example` 新增 `TA_ADMIN_TOKEN`（建议必填）说明；`docs/nas-docker.md`、
+  `docs/CONFIG.md`、`docs/ADMIN.md` 同步部署与安全说明。
+
 ## [0.7.3] - 2026-11-19
 
 ### Fixed

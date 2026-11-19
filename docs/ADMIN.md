@@ -66,7 +66,12 @@
 
 - 密钥保存在 `runtime/config/api-keys.json`（`runtime/` 已被 gitignore），可以直接备份/迁移
 - 生成时明文只在这一屏集中展示，之后在列表里也能复制
-- 管理台只接受**回环地址**访问；服务本身也只绑 `127.0.0.1`
+- 管理台默认只接受**回环地址**访问；服务本身 PC 版也只绑 `127.0.0.1`。
+  设 `TA_ADMIN_ALLOW_REMOTE=1` **且**已设 `TA_ADMIN_TOKEN` 时放行局域网访问
+  （Docker compose 默认这样配）；只放行不设令牌是危险组合，会自动退回仅回环并打警告
 - 想让管理接口也要令牌，启动前设 `TA_ADMIN_TOKEN=xxx`，页面会提示输入
   （存在浏览器 localStorage，只影响管理接口，不影响 `/v1` 调用）
+- Docker 端 compose 固定 `TA_REQUIRE_AUTH=1`：端点强制鉴权，未带有效 API 密钥的调用一律 401
+- 「会话 / 登录」面板：凭据状态、浏览器登录回执 URL 导入（自动备份 + generation 归 1 +
+  可选立即续期验证）、手动续期——NAS 上无需再 `docker exec`
 - 环境变量 `TA_API_KEY` 依然可以作为一把「主密钥」长期使用，与管理台密钥并存

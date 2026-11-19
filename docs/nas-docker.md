@@ -87,16 +87,22 @@ node tools/export-credentials.mjs --out D:\ta-export
 cp docker/.env.example .env
 ```
 
-编辑 `.env`，三个关键字段：
+编辑 `.env`，关键字段：
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `TA_DATA_ROOT` | ✅ | 指向第 2 步的数据根目录，如 `/vol1/1000/docker/ta2api/data` |
 | `TA_CRYPT_KEY` | ✅ | `crypt-key.b64` 的**内容**（一行 base64），不是文件路径 |
-| `TA_API_KEY` | 强烈建议 | 端点 Bearer 密钥；端口暴露在局域网时必须设置 |
+| `TA_API_KEY` | 强烈建议 | 端点 Bearer 密钥；也可在管理台生成 `ta-sk-` 密钥 |
+| `TA_ADMIN_TOKEN` | 强烈建议 | 管理台令牌：局域网访问 `http://NAS_IP:8787/admin` 必填（管理台可改密钥、导入凭据） |
 
 可选：`TA_PORT`（宿主映射端口，默认 8787）、`TA_OS_TYPE`（积分接口 OS 头覆盖）、
 `TA_RENEW_AUTO_HANDOVER`（自动首续开关，默认开；设 0 = 被动备份模式，不踢 PC）。
+
+**鉴权与安全（compose 固定）**：gateway 已固定 `TA_REQUIRE_AUTH=1`——**端点强制鉴权**，
+即使密钥表为空，未带有效 API 密钥的调用也返回 401（文案会指引到管理台建密钥）。
+管理台远程访问由 `TA_ADMIN_ALLOW_REMOTE=1` 开启（compose 默认），**前提**是设置了
+`TA_ADMIN_TOKEN`；未设令牌时自动退回仅容器内回环访问并打启动警告。
 
 ## 4. 启动
 
@@ -126,7 +132,8 @@ curl http://NAS_IP:8787/v1/chat/completions \
 ```
 
 客户端接入与 PC 版完全一致：`base_url = http://NAS_IP:8787/v1`（OpenAI 兼容），
-Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:8787/admin`。
+Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:8787/admin`
+（v0.7.4 起支持局域网访问，首次进入会提示输入 `TA_ADMIN_TOKEN`）。
 
 ## 6. 续期机制与关键操作点（务必读）
 
@@ -190,6 +197,10 @@ Anthropic 客户端用 `/v1` + Anthropic 协议；管理台在 `http://NAS_IP:87
     （`docker compose up -d`），整条续期链即自洽在 prod 环境（deviceId 沿用导出包，
     同属①的未实测项）。另：登录时若被「弹回」（浏览器里已有 web 会话），拿到的回执可能
     对应既有 web 会话而非全新会话——想稳妥拿全新会话，先在该页退出登录再重新登录。
+- **★ 更省事的姿势（v0.7.4 起）：管理台「会话 / 登录」面板**。打开 `http://NAS_IP:8787/admin`，
+  面板里直接给出登录入口链接（跟随当前刷新基址域名）、粘贴回执 URL 导入（可先「仅校验预览」）、
+  勾选「导入后立即续期验证」一步到位，也能一键手动续期——上面这套 `docker exec` 流程留作
+  管理台不可用时的兜底。
 - **会话寿命**：token 短期有效 + 90 天绝对期限。renew 日志出现「终态失败（会话已死）」
   或 `SESSION_ABSOLUTE_EXPIRED` 时，续期链已死：走上面的浏览器登录导入直接换新会话，
   或到 PC 重新登录 TeleAgent 后重新导出并替换数据根。

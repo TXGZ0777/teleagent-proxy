@@ -438,6 +438,28 @@
       <div id="ptsBody"><span class="hint">加载中…</span></div>
     </section>
 
+    <section class="card panel" id="sessionPanel">
+      <div class="panel-head">
+        <h2>会话 / 登录</h2>
+        <span class="hint">凭据状态 · 浏览器登录导入 · 手动续期（写入数据根，PC 桌面端不受影响）</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="sessRefresh">刷新</button>
+        <button class="btn primary sm" id="sessRenew">立即续期</button>
+      </div>
+      <div class="fieldlist" id="sessInfo"><div class="field"><span class="k">状态</span><span class="v">加载中…</span></div></div>
+      <p class="panel-note" id="sessLinks"></p>
+      <p class="panel-note">换绑新会话：从上面链接打开官方登录页完成登录（浏览器已有会话会直接「弹回」，想要全新会话先在该页退出登录再登录），等地址栏出现 <code>?code=…&amp;token=…</code> 时整条复制，粘到下面导入。导入会备份旧 token、generation 归 1，并自动 force 续期一次验证新会话可用（续期可能需要约 1 分钟）。</p>
+      <div class="toolbar">
+        <input class="input" id="sessRaw" style="flex:1" placeholder="粘贴登录后地址栏的完整 URL（含 token= 参数），或直接粘 token" />
+      </div>
+      <div class="toolbar">
+        <label class="kv"><input type="checkbox" id="sessThenRenew" checked> 导入后立即续期验证</label>
+        <button class="btn" id="sessDry">仅校验预览</button>
+        <button class="btn primary" id="sessImport">导入新会话</button>
+      </div>
+      <pre class="code" id="sessOut" style="display:none"></pre>
+    </section>
+
     <section class="card panel" id="accessPanel">
       <div class="panel-head">
         <h2>接入信息</h2>
@@ -869,10 +891,13 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 
   function renderAuthMode() {
     var mode = (state.settings && state.settings.requireAuth) || 'auto';
-    $('authMode').value = mode;
-    $('authMode').title = state.gateway && state.gateway.authRequired
-      ? '当前已要求鉴权'
-      : '当前允许匿名调用';
+    var forced = state.gateway && state.gateway.authForced;
+    var sel = $('authMode');
+    sel.value = mode;
+    sel.disabled = Boolean(forced);
+    sel.title = forced
+      ? 'Docker 强制模式（TA_REQUIRE_AUTH=1）：鉴权始终开启，此处的模式选择不生效'
+      : (state.gateway && state.gateway.authRequired ? '当前已要求鉴权' : '当前允许匿名调用');
   }
 
   function visibleKeys() {
@@ -1424,8 +1449,101 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     copy(text, '示例已复制（含密钥）');
   });
 
+  /* ---------- 会话 / 登录 ---------- */
+  var sessionState = null;
+  function loadSession() {
+    return api('/admin/api/session').then(function (d) {
+      sessionState = d;
+      renderSession();
+    }).catch(function (err) {
+      $('sessInfo').innerHTML = '<div class="field"><span class="k">状态</span><span class="v">加载失败：' + esc(err.message) + '</span></div>';
+    });
+  }
+
+  function fmtDays(n) { return (n === null || n === undefined) ? '—' : Number(n).toFixed(1) + ' 天'; }
+  function fmtIso(s) { return s ? s.replace('T', ' ').replace(/\..*$/, '') + ' UTC' : '—'; }
+
+  function renderSession() {
+    if (!sessionState) return;
+    var html;
+    if (!sessionState.ok) {
+      html = '<div class="field"><span class="k">状态</span><span class="v">凭据不可读：' + esc(sessionState.error) + '</span></div>' +
+        '<div class="field"><span class="k">提示</span><span class="v">全新部署先在 PC 跑 tools/export-credentials.mjs 生成骨架</span></div>';
+    } else {
+      var s = sessionState.session;
+      html =
+        '<div class="field"><span class="k">剩余有效期</span><span class="v">' + (s.expired ? '<b class="warntext">已过期</b>' : fmtDays(s.daysLeft)) + '</span></div>' +
+        '<div class="field"><span class="k">过期时间</span><span class="v">' + esc(fmtIso(s.expiresAt)) + '</span></div>' +
+        '<div class="field"><span class="k">90 天绝对期限</span><span class="v">' + (s.absoluteExpiresAt ? esc(fmtIso(s.absoluteExpiresAt)) + '（剩 ' + fmtDays(s.absoluteDaysLeft) + '）' : '—') + '</span></div>' +
+        '<div class="field"><span class="k">generation</span><span class="v">' + (s.generation === null || s.generation === undefined ? '—' : s.generation) + '</span></div>' +
+        '<div class="field"><span class="k">上次成功续期</span><span class="v">' + esc(fmtIso(s.lastSuccessAt)) + (s.handoverBlocked ? ' · <b class="warntext">交接被终态失败阻断（' + esc(s.handoverBlockedCategory || '') + '），重新登录导入可解</b>' : '') + '</span></div>' +
+        '<div class="field"><span class="k">刷新基址</span><span class="v">' + esc(sessionState.renewBase) + '</span></div>';
+    }
+    $('sessInfo').innerHTML = html;
+    var link = sessionState.loginUrl;
+    $('sessLinks').innerHTML = link
+      ? '登录入口：<a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a>（跟随当前刷新基址域名；该页打不开时参考 docs/nas-docker.md 第 6 节注意③换生产域名入口）'
+      : '登录入口：参考 docs/nas-docker.md 第 6 节。';
+  }
+
+  function showSessResult(obj) {
+    var out = $('sessOut');
+    out.style.display = '';
+    out.textContent = JSON.stringify(obj, null, 2);
+  }
+
+  function runImport(dryRun) {
+    var raw = $('sessRaw').value.trim();
+    if (!raw) { toast('先粘贴登录回执 URL 或 token', true); return; }
+    var btn = dryRun ? $('sessDry') : $('sessImport');
+    btn.disabled = true;
+    var oldLabel = btn.textContent;
+    btn.textContent = dryRun ? '校验中…' : '导入中…';
+    api('/admin/api/session/import', {
+      method: 'POST',
+      body: { raw: raw, dryRun: dryRun, thenRenew: !dryRun && $('sessThenRenew').checked },
+    }).then(function (d) {
+      showSessResult(d);
+      if (d.result && d.result.ok) {
+        $('sessRaw').value = '';
+        loadSession();
+        if (d.renewed && d.renewed.ok) toast('导入成功，续期验证通过（generation=' + (d.renewed.meta ? d.renewed.meta.generation : '?') + '）');
+        else if (d.renewed) toast('导入成功，但续期验证失败：' + (d.renewed.message || d.renewed.category || '未知'), true);
+        else toast('导入成功');
+      } else if (d.result) {
+        toast(d.result.message || '导入失败', true);
+      }
+    }).catch(function (err) {
+      toast(err.message, true);
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+    });
+  }
+
+  $('sessRefresh').addEventListener('click', function () { loadSession().then(function () { toast('已刷新'); }); });
+
+  $('sessRenew').addEventListener('click', function () {
+    confirmDo('立即续期？', '会向上游轮换服务端凭据（作废其它持有方的同会话副本），可能需要约 1 分钟。', function () {
+      var btn = $('sessRenew');
+      btn.disabled = true;
+      api('/admin/api/session/renew', { method: 'POST' }).then(function (d) {
+        showSessResult(d.result);
+        loadSession();
+        if (d.result && d.result.ok) toast('续期成功（generation=' + (d.result.meta ? d.result.meta.generation : '?') + '）');
+        else toast('续期失败：' + ((d.result && (d.result.message || d.result.category)) || '未知'), true);
+      }).catch(function (err) { toast(err.message, true); }).finally(function () { btn.disabled = false; });
+    });
+  });
+
+  $('sessDry').addEventListener('click', function () { runImport(true); });
+  $('sessImport').addEventListener('click', function () {
+    confirmDo('导入新会话？', '将备份并替换当前 token.json（generation 归 1），PC 桌面端不受影响。', function () { runImport(false); });
+  });
+
   /* ---------- 轮询 ---------- */
   load();
+  loadSession();
   loadLogs();
   loadPoints();
   loadUsage();
@@ -1433,6 +1551,7 @@ curl http://127.0.0.1:8787/v1/chat/completions \
     if (document.hidden) return;
     if (document.querySelector('.backdrop.show')) return;
     load();
+    loadSession();
     if ($('runlogAuto').checked) loadLogs();
   }, 10000);
 })();

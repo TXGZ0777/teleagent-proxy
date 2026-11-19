@@ -33,6 +33,13 @@ services:
       TA_CRYPT_KEY: "${TA_CRYPT_KEY:?请在 .env 中设置 TA_CRYPT_KEY}"
       # 建议必填：NAS 端口暴露在局域网，务必给端点加 Bearer
       TA_API_KEY: "${TA_API_KEY:-}"
+      # 强制鉴权（固定 1）：未带有效 API 密钥的调用一律 401，优先于密钥表与管理台设置。
+      # 即使密钥表为空也拒绝匿名调用——密钥在管理台（/admin）生成，或用上面这把主密钥。
+      TA_REQUIRE_AUTH: "1"
+      # 管理台令牌：从局域网访问 http://NAS_IP:8787/admin 时必填（管理台可改密钥、导入凭据）
+      TA_ADMIN_TOKEN: "${TA_ADMIN_TOKEN:-}"
+      # 允许局域网访问管理台；未设置 TA_ADMIN_TOKEN 时自动退回仅容器内回环访问
+      TA_ADMIN_ALLOW_REMOTE: "1"
       # 透传到容器内日志的调试开关（可选）
       TA_REFRESH_BASE_URL: "${TA_REFRESH_BASE_URL:-}"
     volumes:

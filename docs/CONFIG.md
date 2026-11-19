@@ -29,6 +29,8 @@
 | `TA_API_KEY` | 空 | 设置后要求 `Authorization: Bearer` 或 `x-api-key`（作为主密钥，与管理台生成的密钥并存） |
 | `TA_KEYS_FILE` | `runtime/config/api-keys.json` | 管理台维护的密钥表路径 |
 | `TA_ADMIN_TOKEN` | 空 | 设置后 `/admin/api/*` 需要令牌（页面会提示输入） |
+| `TA_ADMIN_ALLOW_REMOTE` | 关 | 设为 `1` 允许非回环地址访问管理台；必须配合 `TA_ADMIN_TOKEN`，否则自动退回仅回环（Docker compose 默认 `1`） |
+| `TA_REQUIRE_AUTH` | 关 | 设为 `1` 强制鉴权：未带有效 API 密钥的调用一律 401，优先于密钥表 requireAuth 设置（Docker compose 固定 `1`） |
 | `TA_FALLBACK_PROMPT` | 中性助手 | 客户端没给系统提示词时的兜底人设 |
 | `TA_BUILTIN_PROMPT` | 关 | 设为 `1` 使用内核自带的星辰人设（排障用） |
 | `TA_UPSTREAM_BASE_URL` | 官方上游 | 覆盖上游地址，指向本机抓包代理 |

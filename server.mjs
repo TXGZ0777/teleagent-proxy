@@ -109,6 +109,9 @@ async function verifyKernelPrompt(target, expected) {
 
 // API Key 表：默认 runtime/config/api-keys.json（TA_KEYS_FILE 可改），管理台在这里增删
 const keystore = createKeyStore({ file: process.env.TA_KEYS_FILE || path.join(runtimeRoot, 'config', 'api-keys.json') });
+// Docker/NAS 部署可设 TA_REQUIRE_AUTH=1：鉴权强制开启，优先于密钥表与管理台的 requireAuth 设置
+const authForced = process.env.TA_REQUIRE_AUTH === '1';
+if (authForced) log('TA_REQUIRE_AUTH=1：鉴权强制开启——未带有效 API 密钥的调用一律 401');
 // 运行时配置：管理台可即时改、写 JSON 持久化，重启保留。构造时即把值同步回 process.env。
 const runtimeConfig = createRuntimeConfig({ file: process.env.TA_RUNTIME_CONFIG_FILE || path.join(runtimeRoot, 'config', 'runtime.json') });
 const adminToken = process.env.TA_ADMIN_TOKEN || null;
@@ -270,7 +273,7 @@ if (process.env.TA_OPEN_ADMIN === '1') {
   } catch {}
 }
 
-if (!keystore.required(process.env.TA_API_KEY || null)) {
+if (!authForced && !keystore.required(process.env.TA_API_KEY || null)) {
   log('提示: 当前未开启鉴权，本机任意程序都可调用。可在管理台新建密钥或把鉴权设为「强制校验」。');
 }
 
