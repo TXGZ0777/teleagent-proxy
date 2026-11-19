@@ -122,6 +122,9 @@ fnOS 图形界面：Docker → Compose → 新建项目，compose 文件选 `doc
 ## 5. 验证
 
 ```bash
+# 无密钥 → 一律 401（强制鉴权；0.7.5 起模型列表也锁进鉴权）
+curl http://NAS_IP:8787/v1/models
+
 # 模型列表（带 Bearer）
 curl http://NAS_IP:8787/v1/models -H "Authorization: Bearer $TA_API_KEY"
 
