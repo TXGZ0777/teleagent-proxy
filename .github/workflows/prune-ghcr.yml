@@ -36,9 +36,12 @@ jobs:
         with:
           script: |
             const pkg = 'ta2api';
-            const keep = new Set((core.getInput('keep_tags') || 'latest').split(/\s+/).filter(Boolean));
-            const prune = new Set(core.getInput('prune_tags').split(/\s+/).filter(Boolean));
-            if (!prune.size) { core.setFailed('prune_tags 为空'); return; }
+            // 注意：workflow_dispatch 的 inputs 必须从 github.context.payload.inputs 取，
+            // core.getInput() 读的是 action 的 with: 输入（两者不是一回事）
+            const wf = github.context.payload.inputs ?? {};
+            const keep = new Set(String(wf.keep_tags ?? 'latest').split(/\s+/).filter(Boolean));
+            const prune = new Set(String(wf.prune_tags ?? '').split(/\s+/).filter(Boolean));
+            if (!prune.size) { core.setFailed('prune_tags 为空（workflow_dispatch inputs 未收到）'); return; }
 
             const versions = await github.paginate(
               'GET /user/packages/container/{package_name}/versions',
