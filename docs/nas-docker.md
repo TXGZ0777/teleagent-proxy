@@ -94,7 +94,7 @@ cp docker/.env.example .env
 | `TA_DATA_ROOT` | ✅ | 指向第 2 步的数据根目录，如 `/vol1/1000/docker/ta2api/data` |
 | `TA_CRYPT_KEY` | ✅ | `crypt-key.b64` 的**内容**（一行 base64），不是文件路径 |
 | `TA_API_KEY` | 强烈建议 | 端点 Bearer 密钥；也可在管理台生成 `ta-sk-` 密钥 |
-| `TA_ADMIN_TOKEN` | 强烈建议 | 管理台令牌：局域网访问 `http://NAS_IP:8787/admin` 必填（管理台可改密钥、导入凭据） |
+| `TA_ADMIN_TOKEN` | ✅ 必填 | 管理台令牌：NAS 没有 GUI，`127.0.0.1` 不可能访问——这是管理台的唯一入口（管理台可改密钥、导入凭据），务必设长随机字符串 |
 
 可选：`TA_PORT`（宿主映射端口，默认 8787）、`TA_OS_TYPE`（积分接口 OS 头覆盖）、
 `TA_RENEW_AUTO_HANDOVER`（自动首续开关，默认开；设 0 = 被动备份模式，不踢 PC）。
@@ -118,6 +118,10 @@ fnOS 图形界面：Docker → Compose → 新建项目，compose 文件选 `doc
 
 首次启动 entrypoint 会做软链兜底（镜像内置 runtime 挂进数据根）并检查凭据文件，
 缺文件时会打印 `[entrypoint] 数据根缺少 xxx —— 先在 PC 上按 docs/nas-docker.md 完成凭据导出` 并退出——按提示补齐重跑。
+
+> **镜像版本要求：≥ 0.7.4。** 更早版本（0.7.0–0.7.3）的管理台在 Docker 下仅容器内回环可达——
+> NAS 没有 GUI，`127.0.0.1` 不可能访问，等于没有管理台（换密钥 / 看凭据都做不到）。
+> 这些旧版本的 sha 镜像标签已从 GHCR 撤下，请直接拉 `latest`（当前 0.7.5+）。
 
 ## 5. 验证
 

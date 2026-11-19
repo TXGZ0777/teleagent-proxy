@@ -1,0 +1,70 @@
+# 手动清理 GHCR 旧镜像版本（workflow_dispatch 触发）
+#
+# 用法：
+#   gh workflow run prune-ghcr -f prune_tags="<短 sha 列表，空格分隔>"
+#
+# 语义（fail-safe）：只删除「所有标签都落在 prune_tags 里」的镜像版本；
+#   含 keep_tags（默认 latest）任一标签的版本一律保留；未打标签的历史版本不动。
+#
+# 背景：0.7.0–0.7.3 的镜像里管理台仅容器内回环可达（NAS 没有 GUI，等于没有管理台），
+#   这些版本的 sha 标签自 0.7.5 起撤下；Dockerfile 构建依赖的 payload Release
+#   （payload-3.1.0-dev-20261116）不受影响——那是构建时下载载荷的唯一来源，不可删。
+name: prune-ghcr
+
+on:
+  workflow_dispatch:
+    inputs:
+      prune_tags:
+        description: '要撤下的镜像标签（空格分隔，通常为旧提交短 sha）'
+        required: true
+        type: string
+      keep_tags:
+        description: '永远保留的标签（空格分隔）'
+        required: false
+        default: 'latest'
+        type: string
+
+permissions:
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete matching package versions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pkg = 'ta2api';
+            const keep = new Set((core.getInput('keep_tags') || 'latest').split(/\s+/).filter(Boolean));
+            const prune = new Set(core.getInput('prune_tags').split(/\s+/).filter(Boolean));
+            if (!prune.size) { core.setFailed('prune_tags 为空'); return; }
+
+            const versions = await github.paginate(
+              'GET /user/packages/container/{package_name}/versions',
+              { package_name: pkg, per_page: 100 },
+            );
+            const tagsOf = (v) => (v.metadata?.container?.tags ?? []);
+
+            // 只删「有标签、不含任何 keep 标签、且每个标签都在 prune 列表里」的版本
+            const targets = versions.filter((v) => {
+              const t = tagsOf(v);
+              return t.length > 0 && !t.some((x) => keep.has(x)) && t.every((x) => prune.has(x));
+            });
+            core.info(`versions=${versions.length} toDelete=${targets.length}`);
+
+            for (const v of targets) {
+              core.info(`DELETE ${v.id} tags=[${tagsOf(v).join(', ')}] (updated ${v.updated_at})`);
+              await github.request('DELETE /user/packages/container/{package_name}/versions/{version_id}', {
+                package_name: pkg,
+                version_id: v.id,
+              });
+            }
+
+            core.info('---- 保留 ----');
+            for (const v of versions.filter((x) => !targets.includes(x))) {
+              core.info(`KEEP  ${v.id} tags=[${tagsOf(v).join(', ')}]`);
+            }
+            if (!targets.length) {
+              core.warning('没有匹配到要删除的版本：检查 prune_tags 拼写（应为 7 位提交短 sha）');
+            }
