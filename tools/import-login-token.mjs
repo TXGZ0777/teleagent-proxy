@@ -10,6 +10,13 @@
 //   在浏览器登录成功、地址栏变成 /cowork/auth?code=…&token=… 时，把整个 URL 复制
 //   下来喂给本工具，就等于把这条**全新独立会话**装进 NAS 数据根。
 //
+//   入口可用性：pre 域的登录 App 与 API 网关是独立部署的两套服务，登录页可能单独故障
+//   （2026-11-19 实测：pre 登录页响应超时打不开，桌面端/续期走的 API 正常）。此时改用
+//   生产域名同款登录 App（agent.teleai.com.cn 域，路径同 /meter/teleagent-login/login，
+//   回执 URL 换成该域 /superCowork/sapi/cowork/auth?...）——本工具不挑域名照常导入。
+//   prod 签发的会话用 pre 刷新基址是否可行未实测：导入后跑 once --force 验证；若失败，
+//   把 TA_REFRESH_BASE_URL 切到 prod 基址（详见 docs/nas-docker.md 第 6 节注意③）。
+//
 // 与导出接管的区别（会话模型见 lib/renew.mjs 头注释）：
 //   - 导出接管：NAS 与 PC 共用同一条会话的副本，NAS 首续后 PC 必须重新登录；
 //   - 浏览器登录导入：登录页产生的是一条**新的独立会话**，导入后 refresh 只轮换
