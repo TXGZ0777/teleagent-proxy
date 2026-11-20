@@ -388,8 +388,10 @@ Windows 版与 macOS 版差异不大，但登录态来源不同：
 
 - **角色被折叠成文本**：kernel 的 session API 只接受 parts，system/assistant/tool 会拼进一段文本；
   多轮语义没问题，但严格的 role 结构无法保留。
-- **工具中继只做了 Responses（Codex）这一路**：`/v1/chat/completions` 与 `/v1/messages` 仍然忽略 `tools`。
-  Claude Code 要能改文件，需要把 Anthropic 的 `tool_use`/`tool_result` 接到同一套桥（工作量不大，但没做）。
+- **工具中继三协议都通了**：`/v1/responses`（Codex）、`/v1/chat/completions`（tools/tool_calls/role:tool）、
+  `/v1/messages`（tool_use/tool_result，含流式 input_json_delta）共用同一套 MCP 桥。客户端发来的 `tools`
+  会被注册成内核侧 MCP 工具，模型调用时挂起、翻成协议各自的形状交回客户端执行，结果回灌后放行续跑。
+  三协议会话按 `chat:` / `codex:` / `anthropic:` 前缀隔离；集成测试见 `node tools/test-tool-relay.mjs`（假内核，不依赖真实 TeleAgent）。
 - **并行工具调用未验证**：一次返回多个 `function_call` 时按顺序下发，客户端会逐个执行。
 - **文件水印**：kernel 的 
 eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（默认不会出现）；如自行放行 kernel 工具需注意。
@@ -401,7 +403,7 @@ eport_final_files 会给产出文件追加「AI生成」，已加入禁用表（
 
 ## 版本
 
-当前版本 **0.3.2**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **0.3.3**，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全与合规
 

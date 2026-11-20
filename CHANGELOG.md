@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.3] - 2026-11-20
+
+### Added
+
+- **工具中继补齐另外两路**：此前只有 `/v1/responses`（Codex）接了 MCP 工具桥，`/v1/chat/completions`
+  与 `/v1/messages` 会忽略客户端发来的 `tools`，接入支持工具调用的 agent 时只能纯对话。现在三路共用
+  同一套「挂起→回灌→放行」状态机：
+  - chat：请求 `tools` 注册成 MCP 工具，模型调用翻成 assistant `tool_calls`（`finish_reason=tool_calls`，
+    含流式 `tool_calls` delta）；`role:tool` 消息按 `tool_call_id` 回灌放行。
+  - Anthropic：`input_schema` → MCP `parameters`，模型调用翻成 `tool_use` content block（流式含
+    `input_json_delta`，`stop_reason=tool_use`）；`tool_result` 按 `tool_use_id` 回灌放行，
+    `call_xxx`/`toolu_xxx` 无状态互换，无需额外映射表。
+  - `runTurn` 下沉工具状态机，chat/anthropic 共用；会话按 `chat:`/`anthropic:` 前缀隔离，避免与
+    Responses 的会话表串台。无工具时行为与旧版完全一致。
+- `tools/test-tool-relay.mjs`：假内核集成测试（不依赖真实 TeleAgent），覆盖三协议工具往返、
+  流式工具 delta 序列与纯对话回归，26 项断言全通过。
+
 ## [0.3.2] - 2026-11-07
 
 ### Added
